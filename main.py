@@ -152,12 +152,11 @@ def _draw_room(char, translate_x, mirror):
     # ২. চরিত্র (ঘুম/হাঁটা/বসা/টাইপিং)
     char.draw(anim_time())
 
-    # ৩–৬. আলো স্তর: অন্ধকার → উষ্ণ glow → রশ্মি → স্ক্রিন আভা
+    # ৩–৬. আলো স্তর: অন্ধকার → উষ্ণ glow → স্ক্রিন আভা
+    # (স্বাভাবিক ভিউয়ে আলোর রশ্মি আঁকা হয় না — শুধু glow; রশ্মি শুধু ডিবাগ ভিউয়ে, নিচে)
     lighting.draw_darkness(lit)
     if char.lamp_on:
         lighting.draw_glow()
-        if not _debug:                                    # ডিবাগে রশ্মি লাল/সবুজে আলাদা আঁকা হবে
-            lighting.draw_rays(debug=False)
     if char.monitor_on:
         lighting.draw_screen_glow()
 
