@@ -5,10 +5,30 @@
 
 import math
 
+from OpenGL.GL import glEndList, glGenLists, glNewList, GL_COMPILE
+
 import sprites
 from pixel import draw_box, draw_pixel, draw_rect, draw_sprite
 
 import config
+
+# (rug_name, messy) → display list id; build_room_lists() ভরে দেয়
+ROOM_LISTS = {}
+
+
+def _floor_cell_color(x, y, row):
+    # কী করছে: মেঝের এক ঘরের রঙ ঠিক করছে design §5-এর অগ্রাধিকার নিয়মে (লাইন > জোড়া > হাইলাইট > base)
+    # কেন লাগছে: তক্তার লাইন, শেষ-জোড়া ও হাইলাইট আলাদা রঙে মেঝেকে সমতল না দেখিয়ে বাস্তব দেখায়
+    # real world-এ এটা কোথায় দেখা যায়: প্রোসিজারাল টেক্সচার — সূত্র দিয়ে প্যাটার্নের রঙ বের করা
+    if (y - config.FLOOR_TOP) % config.PLANK_H == config.PLANK_H - 1:
+        return config.FLOOR_D                     # তক্তার মাঝের লাইন
+    if (x + row * config.PLANK_SEAM_SHIFT) % config.PLANK_SEAM_MOD == 0:
+        return config.FLOOR_D                      # তক্তার শেষ জোড়া
+    if ((y - config.FLOOR_TOP) % config.PLANK_H == 0
+            and (x + row * config.PLANK_HL_SHIFT) % config.PLANK_HL_MOD
+            < config.PLANK_HL_WIDTH):
+        return config.FLOOR_L                      # তক্তার হাইলাইট
+    return config.FLOOR
 
 
 def draw_wall_and_floor():
@@ -21,21 +41,19 @@ def draw_wall_and_floor():
     draw_rect(*config.BASEBOARD, config.TRIM)
     draw_rect(*config.BASEBOARD_EDGE, config.TRIM_L)
 
-    # মেঝে: প্রতি পিক্সেল design §5-এর নিয়মে রঙ ঠিক করা হয় (row = কোন তক্তা)
+    # মেঝে: প্রতি সারিতে একই রঙের পরপর ঘরগুলোকে একটি rect (run) হিসেবে আঁকি — পিক্সেল-প্রতি quad
+    # নয়। ফলাফল হুবহু একই, কিন্তু quad সংখ্যা অনেক কমে (display list দ্রুত রিপ্লে হয়)।
     for y in range(config.FLOOR_TOP, config.FLOOR_BOTTOM + 1):
         row = (y - config.FLOOR_TOP) // config.PLANK_H
-        for x in range(config.ROOM_W):
-            if (y - config.FLOOR_TOP) % config.PLANK_H == config.PLANK_H - 1:
-                color = config.FLOOR_D            # তক্তার মাঝের লাইন
-            elif (x + row * config.PLANK_SEAM_SHIFT) % config.PLANK_SEAM_MOD == 0:
-                color = config.FLOOR_D            # তক্তার শেষ জোড়া
-            elif ((y - config.FLOOR_TOP) % config.PLANK_H == 0
-                  and (x + row * config.PLANK_HL_SHIFT) % config.PLANK_HL_MOD
-                  < config.PLANK_HL_WIDTH):
-                color = config.FLOOR_L            # তক্তার হাইলাইট
-            else:
-                color = config.FLOOR
-            draw_pixel(x, y, color)
+        run_start = 0
+        run_color = _floor_cell_color(0, y, row)
+        for x in range(1, config.ROOM_W):
+            color = _floor_cell_color(x, y, row)
+            if color != run_color:
+                draw_rect(run_start, y, x - run_start, 1, run_color)  # এক রঙের run শেষ
+                run_start = x
+                run_color = color
+        draw_rect(run_start, y, config.ROOM_W - run_start, 1, run_color)  # সারির শেষ run
 
 
 def draw_decor():
@@ -192,3 +210,28 @@ def draw_lamp_shade(on=False, warn=False):
     draw_rect(*config.LAMP_SHADE_RIM, config.OUTLINE)
     if on:
         draw_rect(*config.LAMP_BULB_LINE, config.LAMP_BULB)
+
+
+def build_room_lists():
+    # কী করছে: রুমের স্ট্যাটিক অংশ (দেয়াল/মেঝে/ডেকর/রাগ/বিছানা/ডেস্ক/চেয়ার) ৪টি display list-এ
+    #           একবার কম্পাইল করছে — neat/messy কম্বল × দুই রাগ রঙ (Samee, Rifat)
+    # কেন লাগছে: Python-এ প্রতি ফ্রেমে হাজার হাজার quad আঁকা ধীর; list-এ রেখে glCallList দ্রুত রিপ্লে হয়
+    # real world-এ এটা কোথায় দেখা যায়: GPU-তে একবার geometry আপলোড করে বারবার আঁকা (VBO/display list)
+    # নোট: স্ক্রিন, ল্যাম্প শেড ও ঘুমন্ত মাথা list-এ নেই — এগুলো পরে বদলায় বলে প্রতি ফ্রেমে নতুন আঁকা হয়
+    rug_colors = {
+        "samee": (config.SAMEE_RUG, config.SAMEE_RUG_D, config.SAMEE_RUG_L),
+        "rifat": (config.RIFAT_RUG, config.RIFAT_RUG_D, config.RIFAT_RUG_L),
+    }
+    variants = [("samee", False), ("samee", True), ("rifat", False), ("rifat", True)]
+    base = glGenLists(len(variants))   # পরপর ৪টি list id বরাদ্দ করে
+    for i, (rug, messy) in enumerate(variants):
+        list_id = base + i
+        glNewList(list_id, GL_COMPILE)   # এখান থেকে কমান্ডগুলো list-এ জমা হবে (আঁকা হবে না)
+        draw_wall_and_floor()
+        draw_decor()
+        draw_rug(rug_colors[rug])
+        draw_bed(messy)
+        draw_desk()
+        draw_chair()
+        glEndList()
+        ROOM_LISTS[(rug, messy)] = list_id

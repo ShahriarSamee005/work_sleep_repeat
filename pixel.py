@@ -1,5 +1,7 @@
 """pixel.py — নিচু স্তরের ড্রয়িং হেল্পার: hex→rgb, set_color, pixel/rect/box/sprite/text।"""
 
+from functools import lru_cache
+
 from OpenGL.GL import (
     glBegin,
     glBitmap,
@@ -19,10 +21,12 @@ BULLET = "•"                                # '•' — GLUT bitmap font এ�
 _BULLET_BITS = bytes((0xF0, 0xF0, 0xF0, 0xF0))   # 4×4 ভরাট বর্গ (প্রতি বাইটের উপরের ৪টি বিট সেট)
 
 
+@lru_cache(maxsize=None)
 def hex_to_rgb(hex_color):
     # কী করছে: "#4a6aa8"-এর মতো হেক্স স্ট্রিংকে 0–1 রেঞ্জের (r, g, b) ফ্লোটে বদলাচ্ছে
     # কেন লাগছে: OpenGL রঙ চায় 0–1 ফ্লোটে, কিন্তু আমরা config-এ রঙ রাখি পড়ার সুবিধায় হেক্সে
     # real world-এ এটা কোথায় দেখা যায়: CSS/ডিজাইন টুল হেক্স কোডকে GPU-র ফ্লোট কালারে রূপান্তর করে
+    # lru_cache: রঙ গোনা মুষ্টিমেয়, তাই একবার পার্স করে মনে রাখলে প্রতি ফ্রেমে বারবার পার্স লাগে না (দ্রুত)
     h = hex_color.lstrip("#")
     return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
 

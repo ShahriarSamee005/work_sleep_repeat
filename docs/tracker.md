@@ -9,7 +9,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 0 | Project setup | ✅ | ✅ | 2026-09-25 |
 | 1 | Grid and pixel helpers | ✅ | ✅ | 2026-09-25 |
 | 2 | One static room | ✅ | ✅ | 2026-09-25 |
-| 3 | Two rooms + display lists | ⬜ | ⬜ | |
+| 3 | Two rooms + display lists | ✅ | ✅ | 2026-09-25 |
 | 4 | Hand-written algorithms | ⬜ | ⬜ | |
 | 5 | Working state (no animation) | ⬜ | ⬜ | |
 | 6 | Animation | ⬜ | ⬜ | |
@@ -49,13 +49,14 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - Gate passed 2026-09-25. Rug stitch dots use the rug's dark edge color (matches mockup). No §5 coordinate changed; WALK_A sprite width normalized 10→9 (see Discoveries).
 
 ### Phase 3: Two rooms + display lists
-- [ ] Rifat's room mirrored with glScalef(-1, 1, 1)
-- [ ] Different rug colors
-- [ ] Divider
-- [ ] Labels readable
-- [ ] Display lists in use
-- [ ] FPS close to 60
+- [x] Rifat's room mirrored with glScalef(-1, 1, 1)
+- [x] Different rug colors (Samee grey-blue, Rifat green)
+- [x] Divider (x95 = #3a3346, x96 = #2c2637)
+- [x] Labels readable (drawn outside mirror matrix, centered under each rug)
+- [x] Display lists in use (4 lists: neat/messy × 2 rug colors; glCallList in display)
+- [x] FPS close to 60 (actually ~200–247 after floor batching fix; was ~30 before)
 - [ ] **Understood:** why translate by 97 + 93
+- Gate passed 2026-09-25. Mirror pixel-checked (3 pairs match; rug differs). hex_to_rgb memoization kept.
 
 ### Phase 4: Hand-written algorithms
 - [ ] bresenham_line
@@ -142,6 +143,7 @@ Candidates to watch for:
 | 2026-09-25 | GLUT bitmap fonts only support char codes 1–255; "•" (U+2022) renders nothing and advances 0 px | Old bitmap fonts carry a 256-glyph table, so any Unicode character above 255 is silently skipped. |
 | 2026-09-25 | `glutCreateWindow` needs a `bytes` title, not a `str` (else `ctypes.ArgumentError`) | PyOpenGL passes the title straight to a C `char*`, which only accepts bytes, so the string must be `.encode()`d first. |
 | 2026-09-25 | design §7 WALK_A leg rows were 10 px wide while STAND is 9 px | The design doc had a stray trailing dot; I trimmed it so the walk frame lines up with the standing sprite. |
+| 2026-09-25 | Drawing the floor as one quad per pixel (~6882/room) dropped FPS to ~30, even inside a display list | Thousands of tiny glBegin/glEnd blocks are slow to replay; batching each row into same-color "runs" cut it to a few hundred quads and FPS jumped to ~200 (identical pixels). |
 
 ## Future ideas → reflection Q4 "One more week?"
 

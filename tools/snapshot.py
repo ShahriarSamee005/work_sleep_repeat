@@ -46,7 +46,7 @@ def render_to_png(path):
     glutInitWindowSize(config.WINDOW_W, config.WINDOW_H)
     glutCreateWindow(b"snapshot")
     glutDisplayFunc(app.display)     # অ্যাপের আসল display() ব্যবহার করছি
-    app.init_gl()
+    app.init_scene()                 # projection/blending + display list তৈরি (context লাগে)
 
     for _ in range(3):              # উইন্ডো realize হতে কয়েকটি ইভেন্ট পাম্প
         glutMainLoopEvent()
