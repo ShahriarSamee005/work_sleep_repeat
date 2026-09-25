@@ -12,8 +12,8 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 3 | Two rooms + display lists | ✅ | ✅ | 2026-09-25 |
 | 4 | Hand-written algorithms | ✅ | ✅ | 2026-09-25 |
 | 5 | Working state (no animation) | ✅ | ✅ | 2026-09-25 |
-| 6 | Animation | 🟨 | ⬜ | 2026-09-25 |
-| 7 | Lighting + debug view | ⬜ | ⬜ | |
+| 6 | Animation | ✅ | ✅ | 2026-09-25 |
+| 7 | Lighting + debug view | 🟨 | ⬜ | 2026-09-25 |
 | 8 | Panel | ⬜ | ⬜ | |
 | 9 | Real-time sync | ⬜ | ⬜ | |
 | 10 | Finish and prepare | ⬜ | ⬜ | |
@@ -87,15 +87,18 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - [x] Tests: tests/test_character.py all PASS (14 checks); real dt clamp to 0.1s
 - [x] snapshot.py: --sheet/--toggle/--frames/--start contact sheets
 - [ ] **Understood:** Bezier formula and easing
-- Gate awaiting user confirm. FPS ~60 via glutTimerFunc(16) real-dt loop.
+- Gate confirmed by user 2026-09-25 (watched walk, mid-walk turnaround, blanket timing live). Kept the existing commit dbe9700 as the Phase 6 commit (already pushed; not renamed). FPS ~60 via glutTimerFunc(16) real-dt loop.
 
 ### Phase 7: Lighting + debug
-- [ ] Darkness overlay (idle 0.40, working 0.30)
-- [ ] Glow circles (scanline circle, clipped)
-- [ ] Rays (Cohen-Sutherland)
-- [ ] Emissive parts on top
-- [ ] Debug view (D) and grid (G)
-- [ ] Light never crosses the divider
+- [x] Darkness overlay (idle 0.40, working 0.30; drawn per room, room-local NIGHT quad)
+- [x] Glow circles (5× scanline_circle at GLOW_CENTER, per-cell clipped to room rect, alpha-stacked)
+- [x] Rays (12 rays fan from lamp, Cohen-Sutherland clip to (0,0,92,91), drawn with bresenham_line)
+- [x] Emissive parts on top (off-state screen/lamp dimmed under overlay; on-state redrawn after lighting)
+- [x] Screen glow (small GLOW_SCREEN circle at monitor, low alpha, monitor_on only)
+- [x] Debug view (D = grid + Bezier + control points + clip rects + red-unclipped/green-clipped rays) and grid only (G)
+- [x] snapshot.py: --debug flag turns the overlay on for a snapshot
+- [x] Light never crosses the divider (glow + rays clipped to room; verified in 4 snapshots + debug)
+- Gate awaiting user confirm (live keys 1/2). Verified via snapshots: both-idle evenly dark; Samee-work warm glow, his side brighter, divider clean; both-work both warm; --debug shows curve/points/clip/red-vs-green with green stopping at the room edge. Bench: both-working 13.6 ms/frame (~74 FPS raw, capped 60 by the 16 ms timer); debug overlay ~40 FPS (diagnostic view only).
 
 ### Phase 8: Panel
 - [ ] Moon/sun icon
@@ -149,6 +152,9 @@ Candidates to watch for:
 | 2026-09-25 | `glutCreateWindow` needs a `bytes` title, not a `str` (else `ctypes.ArgumentError`) | PyOpenGL passes the title straight to a C `char*`, which only accepts bytes, so the string must be `.encode()`d first. |
 | 2026-09-25 | design §7 WALK_A leg rows were 10 px wide while STAND is 9 px | The design doc had a stray trailing dot; I trimmed it so the walk frame lines up with the standing sprite. |
 | 2026-09-25 | Drawing the floor as one quad per pixel (~6882/room) dropped FPS to ~30, even inside a display list | Thousands of tiny glBegin/glEnd blocks are slow to replay; batching each row into same-color "runs" cut it to a few hundred quads and FPS jumped to ~200 (identical pixels). |
+| 2026-09-25 | Alpha stacking makes the lamp glow: 5 translucent circles at α 0.08 pile up so the shared centre is brightest, giving the stepped pixel-art falloff for free | `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blends each circle over the last, so overlapping cells add up — no gradient maths needed, the overlap *is* the gradient. |
+| 2026-09-25 | Emissive parts must be drawn *after* the darkness overlay, or they get dimmed with the room | The off screen/lamp are drawn before the overlay (so they dim like furniture); the on screen/lamp are redrawn after it (so light sources stay bright). Same object, two layers. |
+| 2026-09-25 | Batching all ray/glow cells into one `glBegin(GL_QUADS)` per colour kept 60 FPS with lighting on | The rays are still rasterised by hand-written `bresenham_line`, but every cell is emitted inside a single begin/end instead of one per cell — one draw call, not hundreds. |
 
 ## Future ideas → reflection Q4 "One more week?"
 

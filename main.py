@@ -37,6 +37,7 @@ from OpenGL.GLUT import (
     glutPostRedisplay,
     glutSwapBuffers,
     glutTimerFunc,
+    GLUT_BITMAP_8_BY_13,
     GLUT_BITMAP_9_BY_15,
     GLUT_DOUBLE,
     GLUT_RGBA,
@@ -44,9 +45,9 @@ from OpenGL.GLUT import (
 
 import character
 import config
+import lighting
 import room
-from pixel import draw_rect, draw_sprite, draw_text, hex_to_rgb
-from sprites import HEAD_SLEEP, HEAD_SLEEP_COLORS
+from pixel import draw_rect, draw_text, hex_to_rgb
 
 # glutLeaveMainLoop freeglut-এ আছে; না থাকলে fallback হিসেবে sys.exit ব্যবহার করব।
 try:
@@ -56,6 +57,11 @@ except ImportError:
 
 ESC = b"\x1b"                     # কীবোর্ডের ESC কী-এর বাইট মান (ASCII 27)
 LABEL_FONT = GLUT_BITMAP_9_BY_15  # নাম লেবেলের ফন্ট
+DEBUG_FONT = GLUT_BITMAP_8_BY_13  # ডিবাগ লেবেলের ছোট ফন্ট
+
+# ডিবাগ ভিউ state (design §11): D → পুরো overlay, G → শুধু গ্রিড। snapshot টুল _debug সেট করতে পারে।
+_debug = False
+_grid = False
 
 # দুই ক্যারেক্টার — সব per-user state এখন এখানে (Phase 5-এর গ্লোবাল বুলিয়ান বাদ)
 samee = character.Character("samee")
@@ -127,18 +133,47 @@ def init_scene():
 
 
 def _draw_room(char, translate_x, mirror):
-    # কী করছে: এক রুম আঁকছে — matrix push করে translate (ও Rifat হলে reflect), char-এর অবস্থা অনুযায়ী
-    #           neat/messy cached list, স্ক্রিন/ল্যাম্প (device state), তারপর char.draw() দিয়ে চরিত্র, pop
-    # কেন লাগছে: দুই রুমই একই কোড; চরিত্রের state ঠিক করে বিছানা এলোমেলো কিনা, device চালু কিনা, কোন sprite
-    # real world-এ এটা কোথায় দেখা যায়: সিন গ্রাফে একই মডেল ভিন্ন transform ও state-এ আঁকা
+    # কী করছে: এক রুম আঁকছে design §8-এর স্তর ক্রমে — স্ট্যাটিক রুম → নিভানো স্ক্রিন/ল্যাম্প (ম্লান হবে) →
+    #           চরিত্র → অন্ধকার overlay → glow → রশ্মি → স্ক্রিন আভা → জ্বলন্ত স্ক্রিন/ল্যাম্প (উজ্জ্বল, উপরে)
+    #           → ডিবাগ overlay। সব এক push/pop matrix-এর ভেতরে (translate, Rifat হলে reflect)।
+    # কেন লাগছে: আলো স্তর হিসেবে উপরে বসে; নিভানো device overlay-তে ম্লান হয়, জ্বলন্ত device পরে এঁকে উজ্জ্বল থাকে
+    # real world-এ এটা কোথায় দেখা যায়: রেন্ডারারে scene → lighting pass → emissive pass ক্রমে আঁকা
+    lit = char.monitor_on or char.lamp_on                 # রুমে কোনো device চালু = "কাজ হচ্ছে"
     glPushMatrix()
     glTranslatef(translate_x, config.RIFAT_ORIGIN[1], 0)  # y=2 দুই রুমেই এক
     if mirror:
         glScalef(-1, 1, 1)                                # অনুভূমিক প্রতিফলন (reflection)
+
+    # ১. স্ট্যাটিক রুম (cached) + নিভানো স্ক্রিন/ল্যাম্প — এগুলো অন্ধকার overlay-তে ম্লান হবে
     glCallList(room.ROOM_LISTS[(char.name, char.bed_is_messy())])  # IN_BED হলে neat, নাহলে messy
-    room.draw_screen(on=char.monitor_on)                  # dynamic — list-এ নেই
-    room.draw_lamp_shade(on=char.lamp_on, warn=False)     # dynamic — list-এ নেই
-    char.draw(anim_time())                                # state অনুযায়ী চরিত্র (ঘুম/হাঁটা/বসা/টাইপিং)
+    room.draw_screen(on=False)                            # নিভানো স্ক্রিনের ভিত্তি (base)
+    room.draw_lamp_shade(on=False, warn=False)            # নিভানো শেডের ভিত্তি (base)
+
+    # ২. চরিত্র (ঘুম/হাঁটা/বসা/টাইপিং)
+    char.draw(anim_time())
+
+    # ৩–৬. আলো স্তর: অন্ধকার → উষ্ণ glow → রশ্মি → স্ক্রিন আভা
+    lighting.draw_darkness(lit)
+    if char.lamp_on:
+        lighting.draw_glow()
+        if not _debug:                                    # ডিবাগে রশ্মি লাল/সবুজে আলাদা আঁকা হবে
+            lighting.draw_rays(debug=False)
+    if char.monitor_on:
+        lighting.draw_screen_glow()
+
+    # ৭. emissive: জ্বলন্ত স্ক্রিন ও ল্যাম্প শেড — আলোর পরে এঁকি যেন উজ্জ্বল থাকে (ম্লান না হয়)
+    if char.monitor_on:
+        room.draw_screen(on=True)
+    if char.lamp_on:
+        room.draw_lamp_shade(on=True, warn=False)
+
+    # ডিবাগ overlay (দুই রুমেই, matrix-এর ভেতরে যাতে transform মেলে; text লেবেল বাইরে আঁকা হয়)
+    if _debug:
+        lighting.draw_rays(debug=True)                    # লাল (কাটার আগে) + সবুজ (কাটার পরে)
+        lighting.draw_debug(grid_only=False)              # গ্রিড + clip rect + Bezier + কন্ট্রোল পয়েন্ট
+    elif _grid:
+        lighting.draw_debug(grid_only=True)               # শুধু গ্রিড
+
     glPopMatrix()
 
 
@@ -181,6 +216,20 @@ def _draw_labels():
     _draw_centered_text(rx, y, "Rifat", config.TEXT, LABEL_FONT)
 
 
+def _draw_debug_labels():
+    # কী করছে: ডিবাগ text — Samee-র ৪টি কন্ট্রোল পয়েন্টের নাম (P0..P3) ও নিচে ছোট legend আঁকে,
+    #           সব গ্লোবাল কোঅর্ডিনেটে (mirror matrix-এর বাইরে)
+    # কেন লাগছে: mirror matrix-এর ভেতরে text আঁকলে আয়নার মতো উল্টো হতো; তাই লেবেল বাইরে গ্লোবালে
+    # real world-এ এটা কোথায় দেখা যায়: ডিবাগ HUD — জ্যামিতি transform-এ থাকলেও লেবেল সবসময় সোজা
+    ox, oy = config.SAMEE_ORIGIN
+    points = (config.WALK_P0, config.WALK_P1, config.WALK_P2, config.WALK_P3)
+    for i, (px, py) in enumerate(points):                 # Samee: গ্লোবাল = লোকাল + origin
+        draw_text(ox + px + 2, oy + py, "P%d" % i, config.DEBUG_CTRL, DEBUG_FONT)
+    draw_text(config.SAMEE_ORIGIN[0], config.GRID_H - 3,
+              "D=debug  G=grid   red=unclipped  green=clipped",
+              config.TEXT, DEBUG_FONT)
+
+
 def display():
     # কী করছে: স্ক্রিন ক্লিয়ার করে Samee (translate) ও Rifat (translate+reflect) রুম, ডিভাইডার,
     #           ফ্রেম ও নাম লেবেল এঁকে বাফার সোয়াপ করছে; শেষে FPS গোনে
@@ -194,6 +243,8 @@ def display():
     _draw_divider()
     _draw_frame()
     _draw_labels()   # mirror matrix-এর বাইরে, তাই লেখা সোজা
+    if _debug:
+        _draw_debug_labels()   # ডিবাগ text-ও mirror matrix-এর বাইরে
 
     glutSwapBuffers()
     _tick_fps()
@@ -229,9 +280,10 @@ def timer(value):
 
 
 def keyboard(key, x, y):
-    # কী করছে: ESC → বন্ধ; '1' → Samee, '2' → Rifat-এর target_working টগল করে (set_working)
-    # কেন লাগছে: টগল শুধু লক্ষ্য বদলায়; ক্যারেক্টার নিজে অ্যানিমেশনে সেই লক্ষ্যে পৌঁছায়
-    # real world-এ এটা কোথায় দেখা যায়: ডেমো কী দিয়ে target state পাল্টানো (animation নিজে মেলায়)
+    # কী করছে: ESC → বন্ধ; '1'/'2' → Samee/Rifat টগল; 'D' → ডিবাগ overlay, 'G' → শুধু গ্রিড টগল
+    # কেন লাগছে: টগল শুধু লক্ষ্য বদলায় (animation মেলায়); D/G দিয়ে ক্লিপিং/পথ চোখে দেখানো (viva)
+    # real world-এ এটা কোথায় দেখা যায়: ডেমো কী দিয়ে target state ও ডিবাগ view পাল্টানো
+    global _debug, _grid
     if key == ESC:
         if glutLeaveMainLoop is not None:
             glutLeaveMainLoop()   # freeglut-এ মেইন লুপ পরিষ্কারভাবে থামায়
@@ -241,6 +293,11 @@ def keyboard(key, x, y):
         samee.set_working(not samee.target_working)
     elif key == b"2":
         rifat.set_working(not rifat.target_working)
+    elif key in (b"d", b"D"):
+        _debug = not _debug       # পুরো ডিবাগ overlay (গ্রিডও দেখায়)
+    elif key in (b"g", b"G"):
+        _grid = not _grid         # শুধু গ্রিড লাইন
+    glutPostRedisplay()           # ডিবাগ টগলের ফল সাথে সাথে দেখাতে রিড্র চাই
 
 
 def main():
