@@ -77,6 +77,16 @@ STAND_COLORS = CHAR_COLORS
 WALK_A_COLORS = CHAR_COLORS
 WALK_B_COLORS = CHAR_COLORS
 
+# পিছন-দিক (back view) স্প্রাইট — একই শরীর/পা, কিন্তু মাথায় HEAD_BACK (মুখ নেই)।
+# design fix: উপরে (dy < 0) হাঁটলে পিঠ দেখা যায়, তাই এই ভার্সন ব্যবহার হয়।
+# STAND-এর প্রথম ৭ সারি = মাথা; সেগুলো HEAD_BACK দিয়ে বদলে বাকি (পা) অংশ রেখে দিই।
+STAND_BACK = HEAD_BACK + STAND[7:]
+WALK_A_BACK = HEAD_BACK + WALK_A[7:]
+WALK_B_BACK = HEAD_BACK + WALK_B[7:]
+STAND_BACK_COLORS = CHAR_COLORS
+WALK_A_BACK_COLORS = CHAR_COLORS
+WALK_B_BACK_COLORS = CHAR_COLORS
+
 # PLANT (9×6) — গাছের পাতা; 'G' = PLANT, 'g' = PLANT_D
 PLANT = [
     "..G.G....",

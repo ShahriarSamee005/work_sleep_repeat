@@ -12,7 +12,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 3 | Two rooms + display lists | ✅ | ✅ | 2026-09-25 |
 | 4 | Hand-written algorithms | ✅ | ✅ | 2026-09-25 |
 | 5 | Working state (no animation) | ✅ | ✅ | 2026-09-25 |
-| 6 | Animation | ⬜ | ⬜ | |
+| 6 | Animation | 🟨 | ⬜ | 2026-09-25 |
 | 7 | Lighting + debug view | ⬜ | ⬜ | |
 | 8 | Panel | ⬜ | ⬜ | |
 | 9 | Real-time sync | ⬜ | ⬜ | |
@@ -78,13 +78,16 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - snapshot.py upgraded: --samee/--rifat idle|work, --t <sec>. Gate passed 2026-09-25 (keys 1/2 tested live).
 
 ### Phase 6: Animation
-- [ ] Character class with 8 states
-- [ ] Bezier walk with easing
-- [ ] Walk frames + bob + sit squash
-- [ ] Devices turn on/off in order
-- [ ] Reverse mid-walk works
-- [ ] Blanket becomes neat only after lying down
+- [x] Character class with 8 states (all per-user state moved out of main globals)
+- [x] Bezier walk with easing (to-bed uses t = 1 - ease_in_out; back-view when moving up)
+- [x] Walk frames + bob + sit squash (squash about feet)
+- [x] Devices turn on/off in order (monitor→lamp on; lamp→monitor off; only while seated)
+- [x] Reverse mid-walk works (progress = 1 - progress; no jump, proven in tests)
+- [x] Blanket becomes neat only after lying down (bed_is_messy True unless IN_BED)
+- [x] Tests: tests/test_character.py all PASS (14 checks); real dt clamp to 0.1s
+- [x] snapshot.py: --sheet/--toggle/--frames/--start contact sheets
 - [ ] **Understood:** Bezier formula and easing
+- Gate awaiting user confirm. FPS ~60 via glutTimerFunc(16) real-dt loop.
 
 ### Phase 7: Lighting + debug
 - [ ] Darkness overlay (idle 0.40, working 0.30)

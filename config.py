@@ -25,6 +25,7 @@ SIT_TIME = 0.3                     # বসে পড়ার সময়
 DEVICE_DELAY = 0.3                # বসার পর মনিটর/ল্যাম্প জ্বলার দেরি
 TYPE_INTERVAL = 0.15              # টাইপিং অ্যানিমেশনে হাত বদলের বিরতি
 STEP_INTERVAL = 0.15             # হাঁটার ফ্রেম (WALK_A/WALK_B) বদলের বিরতি
+DT_CLAMP = 0.1                   # এক টিকে সর্বোচ্চ dt; উইন্ডো drag/pause-এ teleport আটকায়
 
 # =========================================================================
 # হাঁটার Bezier কন্ট্রোল পয়েন্ট (রুম-লোকাল কোঅর্ডিনেট; techspec §4.1 / design §10)
@@ -259,6 +260,8 @@ SIT_HAND_L = (56, 20, 3, 2)     # বাঁ হাত (OUTLINE)
 SIT_HAND_L_SKIN = (57, 20)      # বাঁ হাতের SKIN পিক্সেল
 SIT_HAND_R = (64, 20, 3, 2)     # ডান হাত (OUTLINE)
 SIT_HAND_R_SKIN = (65, 20)      # ডান হাতের SKIN পিক্সেল
+SIT_STAND_POS = (57, 21)        # SITTING_DOWN/STANDING_UP-এ দাঁড়ানো স্প্রাইটের বসার অবস্থান (top-left)
+SIT_SQUASH = 0.9                # বসার সময় উল্লম্ব squash (glScalef(1, 0.9)), পায়ের কাছে pivot
 
 # ---- Desk ----
 DESK_TOP = (44, 13, 33, 13)      # ডেস্ক টপ (DESK)

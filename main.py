@@ -57,12 +57,13 @@ except ImportError:
 ESC = b"\x1b"                     # কীবোর্ডের ESC কী-এর বাইট মান (ASCII 27)
 LABEL_FONT = GLUT_BITMAP_9_BY_15  # নাম লেবেলের ফন্ট
 
-# কে কাজ করছে (Phase 5: কী 1/2 দিয়ে তাৎক্ষণিক টগল; Phase 6-এ animation/sync আসবে)
-samee_working = False
-rifat_working = False
+# দুই ক্যারেক্টার — সব per-user state এখন এখানে (Phase 5-এর গ্লোবাল বুলিয়ান বাদ)
+samee = character.Character("samee")
+rifat = character.Character("rifat")
 
-# অ্যানিমেশন ঘড়ি: স্বাভাবিক রানে বাস্তব সময়; snapshot টুল _fake_time সেট করে সময় ফ্রিজ করতে পারে
+# অ্যানিমেশন ঘড়ি ও dt: স্বাভাবিক রানে বাস্তব সময়; snapshot টুল _fake_time সেট করে সময় ফ্রিজ করতে পারে
 _start_time = time.perf_counter()
+_last_tick = _start_time
 _fake_time = None
 
 # FPS কাউন্টার state (Phase 10-এ পুরো কাউন্টার সরিয়ে ফেলব)
@@ -125,22 +126,19 @@ def init_scene():
     room.build_room_lists()
 
 
-def _draw_room(rug_name, translate_x, mirror, working, t):
-    # কী করছে: এক রুম আঁকছে — matrix push করে translate (ও Rifat হলে reflect), অবস্থা অনুযায়ী
-    #           neat/messy cached list, তারপর dynamic অংশ (স্ক্রিন, ল্যাম্প, ঘুমন্ত মাথা বা বসা ভঙ্গি), pop
-    # কেন লাগছে: দুই রুমই একই কোড ব্যবহার করে; working হলে messy বিছানা+বসা+আলো, নাহলে neat+ঘুম
+def _draw_room(char, translate_x, mirror):
+    # কী করছে: এক রুম আঁকছে — matrix push করে translate (ও Rifat হলে reflect), char-এর অবস্থা অনুযায়ী
+    #           neat/messy cached list, স্ক্রিন/ল্যাম্প (device state), তারপর char.draw() দিয়ে চরিত্র, pop
+    # কেন লাগছে: দুই রুমই একই কোড; চরিত্রের state ঠিক করে বিছানা এলোমেলো কিনা, device চালু কিনা, কোন sprite
     # real world-এ এটা কোথায় দেখা যায়: সিন গ্রাফে একই মডেল ভিন্ন transform ও state-এ আঁকা
     glPushMatrix()
     glTranslatef(translate_x, config.RIFAT_ORIGIN[1], 0)  # y=2 দুই রুমেই এক
     if mirror:
         glScalef(-1, 1, 1)                                # অনুভূমিক প্রতিফলন (reflection)
-    glCallList(room.ROOM_LISTS[(rug_name, working)])      # working→messy, idle→neat (list key = messy bool)
-    room.draw_screen(on=working)                          # dynamic — list-এ নেই
-    room.draw_lamp_shade(on=working, warn=False)          # dynamic — list-এ নেই
-    if working:
-        character.draw_sitting(t)                         # বসা + টাইপিং (সময় t থেকে)
-    else:
-        draw_sprite(*config.HEAD_SLEEP_POS, HEAD_SLEEP, HEAD_SLEEP_COLORS)  # ঘুমন্ত মাথা
+    glCallList(room.ROOM_LISTS[(char.name, char.bed_is_messy())])  # IN_BED হলে neat, নাহলে messy
+    room.draw_screen(on=char.monitor_on)                  # dynamic — list-এ নেই
+    room.draw_lamp_shade(on=char.lamp_on, warn=False)     # dynamic — list-এ নেই
+    char.draw(anim_time())                                # state অনুযায়ী চরিত্র (ঘুম/হাঁটা/বসা/টাইপিং)
     glPopMatrix()
 
 
@@ -190,9 +188,8 @@ def display():
     # real world-এ এটা কোথায় দেখা যায়: গেমের render loop — clear → scene → UI → swap
     glClear(GL_COLOR_BUFFER_BIT)
 
-    t = anim_time()   # টাইপিং অ্যানিমেশনের জন্য বর্তমান সময়
-    _draw_room("samee", config.SAMEE_ORIGIN[0], False, samee_working, t)                 # translate(2, 2)
-    _draw_room("rifat", config.RIFAT_ORIGIN[0] + config.ROOM_W, True, rifat_working, t)  # translate(97+93, 2) + reflect
+    _draw_room(samee, config.SAMEE_ORIGIN[0], False)                     # translate(2, 2)
+    _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True)      # translate(97+93, 2) + reflect
 
     _draw_divider()
     _draw_frame()
@@ -218,27 +215,32 @@ def _tick_fps():
 
 
 def timer(value):
-    # কী করছে: প্রতি ~16ms পর রিড্র চায় (glutPostRedisplay) ও নিজেকে আবার schedule করে
-    # কেন লাগছে: টাইপিং অ্যানিমেশন চলতে টানা ফ্রেম দরকার; ~16ms ≈ 60 FPS
-    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের fixed-interval tick; Phase 6-এ dt সহ পূর্ণ হবে
+    # কী করছে: প্রতি ~16ms-এ বাস্তব dt বের করে দুই চরিত্র update করে, রিড্র চায় ও নিজেকে আবার schedule করে
+    # কেন লাগছে: অ্যানিমেশন বাস্তব সময়ের সাথে চলতে হয়; dt দিয়ে গতি frame-rate নিরপেক্ষ থাকে
+    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের update(dt) — প্রতি টিকে সময় এগিয়ে state আপডেট
+    global _last_tick
+    now = time.perf_counter()
+    dt = now - _last_tick          # গত টিক থেকে কত সময় গেছে (Character.update dt clamp করে)
+    _last_tick = now
+    samee.update(dt)
+    rifat.update(dt)
     glutPostRedisplay()
     glutTimerFunc(16, timer, 0)
 
 
 def keyboard(key, x, y):
-    # কী করছে: ESC → বন্ধ; '1' → Samee-কে, '2' → Rifat-কে IN_BED/WORKING-এর মধ্যে তাৎক্ষণিক টগল
-    # কেন লাগছে: Phase 5-এ animation ছাড়াই দুই অবস্থা যাচাই/ডেমো করতে কী দিয়ে টগল দরকার
-    # real world-এ এটা কোথায় দেখা যায়: ডেমো/ডিবাগ কী দিয়ে দ্রুত state পাল্টানো
-    global samee_working, rifat_working
+    # কী করছে: ESC → বন্ধ; '1' → Samee, '2' → Rifat-এর target_working টগল করে (set_working)
+    # কেন লাগছে: টগল শুধু লক্ষ্য বদলায়; ক্যারেক্টার নিজে অ্যানিমেশনে সেই লক্ষ্যে পৌঁছায়
+    # real world-এ এটা কোথায় দেখা যায়: ডেমো কী দিয়ে target state পাল্টানো (animation নিজে মেলায়)
     if key == ESC:
         if glutLeaveMainLoop is not None:
             glutLeaveMainLoop()   # freeglut-এ মেইন লুপ পরিষ্কারভাবে থামায়
         else:
             sys.exit(0)
     elif key == b"1":
-        samee_working = not samee_working
+        samee.set_working(not samee.target_working)
     elif key == b"2":
-        rifat_working = not rifat_working
+        rifat.set_working(not rifat.target_working)
 
 
 def main():

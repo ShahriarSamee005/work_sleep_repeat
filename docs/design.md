@@ -314,6 +314,12 @@ MOON (12×12)  Y = #f1e6c6, # = #8a7f96     SUN (12×12)  Y = #ffd27a, O = #f2a5
 ....#####...                               .....YY.....
 ```
 
+### Back-view walking sprites (facing fix)
+
+`STAND`, `WALK_A`, `WALK_B` show the **front** (the face row `#W#WW#WS#`). For walking **up** the screen (away from us) we need the **back** of the head. So `sprites.py` also has `STAND_BACK`, `WALK_A_BACK`, `WALK_B_BACK`: the same body/leg rows, but the top 7 head rows replaced by `HEAD_BACK` (no face).
+
+**Rule:** while the character moves **up** (`dy < 0`) use the back view; while it moves **down** (`dy > 0`) use the front view. On the walk curve this means we see the front while descending over the rug, and the back while approaching the desk.
+
 ## 8. Lighting
 
 Lighting is drawn as **layers on top** of the room. Nothing in the room drawing itself changes.
@@ -365,6 +371,13 @@ Top to bottom, centered in the 48-pixel-wide column:
 Going back to bed is the same steps in reverse: lamp off, monitor off, stand, walk back, lie down. The blanket stays messy until the character is back in bed, then becomes neat.
 
 **Walk path (local coordinates, sprite top-left):** start `(30, 40)` beside the bed, control points `(34, 62)` and `(52, 60)`, end `(57, 44)` in front of the chair. The path curves over the rug. These are starting values; tune them in `config.py`.
+
+### Transition moves (implemented in `character.py`)
+
+- **GETTING_UP / LYING_DOWN** slide the standing sprite in a straight line between the pillow head position `HEAD_SLEEP_POS (12, 20)` and the walk start `WALK_P0 (30, 40)` over `GET_UP_TIME`.
+- **SITTING_DOWN** slides the standing sprite from the walk end `WALK_P3 (57, 44)` up to the seated anchor `SIT_STAND_POS (57, 21)` over `SIT_TIME`, while applying a small vertical squash `glScalef(1, SIT_SQUASH)` **about the sprite's feet** (translate to the feet row, scale, translate back), so it compresses down into the chair instead of shrinking from the centre. **STANDING_UP** is the exact reverse (squash eases back to 1.0).
+- **Devices sequence:** after sitting, the monitor turns on `DEVICE_DELAY` later and the lamp `DEVICE_DELAY` after that. When leaving, the lamp turns off first, the monitor `DEVICE_DELAY` later, and only then does STANDING_UP begin. Devices are on **only** while seated (WORKING).
+- **Reversing mid-walk** flips the walk state and sets `progress = 1 - progress`; because `ease_in_out` is symmetric (`ease(1-p) == 1 - ease(p)`), the drawn position does not jump.
 
 ## 11. Debug view (key `D`)
 
