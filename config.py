@@ -248,6 +248,18 @@ MESSY_SHEET_1 = (9, 29, 5, 1)   # চাদরের ভাঁজ (SHEET_D)
 MESSY_SHEET_2 = (12, 33, 6, 1)  # চাদরের ভাঁজ (SHEET_D)
 MESSY_SHEET_3 = (8, 38, 4, 1)   # চাদরের ভাঁজ (SHEET_D)
 
+# ---- Sitting pose (design §6) — বসে কাজ করার ভঙ্গি (রুম-লোকাল) ----
+SIT_HEAD_POS = (57, 21)         # HEAD_BACK স্প্রাইট
+SIT_BODY_POS = (57, 27)         # BODY_BACK স্প্রাইট
+SIT_ARM_L_OUTLINE = (56, 21, 1, 8)  # বাঁ হাতের বাইরের আউটলাইন (OUTLINE)
+SIT_ARM_R_OUTLINE = (66, 21, 1, 8)  # ডান হাতের বাইরের আউটলাইন (OUTLINE)
+SIT_ARM_L_INNER = (57, 22, 1, 7)    # বাঁ হাতের ভেতর (SKIN)
+SIT_ARM_R_INNER = (65, 22, 1, 7)    # ডান হাতের ভেতর (SKIN_S)
+SIT_HAND_L = (56, 20, 3, 2)     # বাঁ হাত (OUTLINE)
+SIT_HAND_L_SKIN = (57, 20)      # বাঁ হাতের SKIN পিক্সেল
+SIT_HAND_R = (64, 20, 3, 2)     # ডান হাত (OUTLINE)
+SIT_HAND_R_SKIN = (65, 20)      # ডান হাতের SKIN পিক্সেল
+
 # ---- Desk ----
 DESK_TOP = (44, 13, 33, 13)      # ডেস্ক টপ (DESK)
 DESK_HL = (45, 14, 31, 1)        # হাইলাইট (DESK_L)

@@ -1,11 +1,13 @@
 """tools/snapshot.py — dev tool: main.display()-এর একটি ফ্রেম PNG-তে রেন্ডার করে (দৃশ্যমান লুপ ছাড়া)।
 
 ব্যবহার:
-    python tools/snapshot.py out.png
+    python tools/snapshot.py out.png [--samee idle|work] [--rifat idle|work] [--t 0.0]
+--samee/--rifat দুই রুমের অবস্থা সেট করে; --t হলো নকল অ্যানিমেশন ঘড়ি (সেকেন্ড), টাইপিং frame যাচাইয়ে।
 GLUT উইন্ডো তৈরি করে এক ফ্রেম আঁকে, ফ্রেমটি পড়ে PNG-তে সেভ করে, glutMainLoop-এ ঢোকে না।
 Pillow লাগে (requirements-dev.txt)। এটি অ্যাপের অংশ নয়, শুধু যাচাইয়ের টুল।
 """
 
+import argparse
 import os
 import sys
 
@@ -67,12 +69,22 @@ def render_to_png(path):
 
 
 def main():
-    # কী করছে: কমান্ড লাইন থেকে আউটপুট পাথ নিয়ে render_to_png ডাকে ও পরিষ্কারভাবে বের হয়
-    # কেন লাগছে: `python tools/snapshot.py out.png` কল করার এন্ট্রি পয়েন্ট
-    # real world-এ এটা কোথায় দেখা যায়: যেকোনো CLI স্ক্রিপ্টের main() যেভাবে আর্গুমেন্ট নেয়
-    out = sys.argv[1] if len(sys.argv) > 1 else "out.png"
-    render_to_png(out)
-    print("wrote", os.path.abspath(out))
+    # কী করছে: আউটপুট পাথ ও অবস্থা/সময় আর্গুমেন্ট পড়ে অ্যাপের state সেট করে render_to_png ডাকে
+    # কেন লাগছে: নির্দিষ্ট অবস্থা (idle/work) ও নির্দিষ্ট সময়ের (typing frame) ছবি তুলতে
+    # real world-এ এটা কোথায় দেখা যায়: টেস্ট হার্নেস নির্দিষ্ট state সেট করে screenshot নেয়
+    parser = argparse.ArgumentParser(prog="snapshot.py")
+    parser.add_argument("out", help="output PNG path")
+    parser.add_argument("--samee", choices=("idle", "work"), default="idle")
+    parser.add_argument("--rifat", choices=("idle", "work"), default="idle")
+    parser.add_argument("--t", type=float, default=0.0, help="fake animation clock (seconds)")
+    args = parser.parse_args()
+
+    app.samee_working = (args.samee == "work")   # অ্যাপের state সরাসরি সেট করি
+    app.rifat_working = (args.rifat == "work")
+    app._fake_time = args.t                       # ঘড়ি ফ্রিজ করি এই সময়ে
+
+    render_to_png(args.out)
+    print("wrote", os.path.abspath(args.out))
     if app.glutLeaveMainLoop is not None:
         app.glutLeaveMainLoop()
 

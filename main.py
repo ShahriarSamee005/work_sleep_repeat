@@ -29,7 +29,6 @@ from OpenGL.GLUT import (
     glutBitmapWidth,
     glutCreateWindow,
     glutDisplayFunc,
-    glutIdleFunc,
     glutInit,
     glutInitDisplayMode,
     glutInitWindowSize,
@@ -37,11 +36,13 @@ from OpenGL.GLUT import (
     glutMainLoop,
     glutPostRedisplay,
     glutSwapBuffers,
+    glutTimerFunc,
     GLUT_BITMAP_9_BY_15,
     GLUT_DOUBLE,
     GLUT_RGBA,
 )
 
+import character
 import config
 import room
 from pixel import draw_rect, draw_sprite, draw_text, hex_to_rgb
@@ -56,9 +57,24 @@ except ImportError:
 ESC = b"\x1b"                     # কীবোর্ডের ESC কী-এর বাইট মান (ASCII 27)
 LABEL_FONT = GLUT_BITMAP_9_BY_15  # নাম লেবেলের ফন্ট
 
+# কে কাজ করছে (Phase 5: কী 1/2 দিয়ে তাৎক্ষণিক টগল; Phase 6-এ animation/sync আসবে)
+samee_working = False
+rifat_working = False
+
+# অ্যানিমেশন ঘড়ি: স্বাভাবিক রানে বাস্তব সময়; snapshot টুল _fake_time সেট করে সময় ফ্রিজ করতে পারে
+_start_time = time.perf_counter()
+_fake_time = None
+
 # FPS কাউন্টার state (Phase 10-এ পুরো কাউন্টার সরিয়ে ফেলব)
 _fps_count = 0
 _fps_t0 = None
+
+
+def anim_time():
+    # কী করছে: অ্যানিমেশনের বর্তমান সময় (সেকেন্ড) দেয় — _fake_time সেট থাকলে সেটি, নাহলে বাস্তব সময়
+    # কেন লাগছে: টাইপিং frame সময়ের উপর নির্ভর করে; snapshot টুল নির্দিষ্ট সময়ের ছবি নিতে সময় ফ্রিজ করে
+    # real world-এ এটা কোথায় দেখা যায়: গেমে "game clock" — টেস্টে সময় নিয়ন্ত্রণ করা যায়
+    return _fake_time if _fake_time is not None else (time.perf_counter() - _start_time)
 
 
 def parse_args():
@@ -109,19 +125,22 @@ def init_scene():
     room.build_room_lists()
 
 
-def _draw_room(rug_name, translate_x, mirror):
-    # কী করছে: এক রুম আঁকছে — matrix push করে translate (ও Rifat হলে reflect), cached list call,
-    #           তারপর dynamic অংশ (স্ক্রিন, ল্যাম্প শেড, ঘুমন্ত মাথা) আঁকে, শেষে pop
-    # কেন লাগছে: দুই রুমই একই কোড ব্যবহার করে; শুধু transform আলাদা (এটাই reflection technique)
-    # real world-এ এটা কোথায় দেখা যায়: সিন গ্রাফে একই মডেল ভিন্ন transform-এ বারবার আঁকা (instancing)
+def _draw_room(rug_name, translate_x, mirror, working, t):
+    # কী করছে: এক রুম আঁকছে — matrix push করে translate (ও Rifat হলে reflect), অবস্থা অনুযায়ী
+    #           neat/messy cached list, তারপর dynamic অংশ (স্ক্রিন, ল্যাম্প, ঘুমন্ত মাথা বা বসা ভঙ্গি), pop
+    # কেন লাগছে: দুই রুমই একই কোড ব্যবহার করে; working হলে messy বিছানা+বসা+আলো, নাহলে neat+ঘুম
+    # real world-এ এটা কোথায় দেখা যায়: সিন গ্রাফে একই মডেল ভিন্ন transform ও state-এ আঁকা
     glPushMatrix()
     glTranslatef(translate_x, config.RIFAT_ORIGIN[1], 0)  # y=2 দুই রুমেই এক
     if mirror:
         glScalef(-1, 1, 1)                                # অনুভূমিক প্রতিফলন (reflection)
-    glCallList(room.ROOM_LISTS[(rug_name, False)])        # neat (কেউ বিছানায়) স্ট্যাটিক রুম
-    room.draw_screen(on=False)                            # dynamic — list-এ নেই
-    room.draw_lamp_shade(on=False, warn=False)            # dynamic — list-এ নেই
-    draw_sprite(*config.HEAD_SLEEP_POS, HEAD_SLEEP, HEAD_SLEEP_COLORS)  # dynamic — list-এ নেই
+    glCallList(room.ROOM_LISTS[(rug_name, working)])      # working→messy, idle→neat (list key = messy bool)
+    room.draw_screen(on=working)                          # dynamic — list-এ নেই
+    room.draw_lamp_shade(on=working, warn=False)          # dynamic — list-এ নেই
+    if working:
+        character.draw_sitting(t)                         # বসা + টাইপিং (সময় t থেকে)
+    else:
+        draw_sprite(*config.HEAD_SLEEP_POS, HEAD_SLEEP, HEAD_SLEEP_COLORS)  # ঘুমন্ত মাথা
     glPopMatrix()
 
 
@@ -171,8 +190,9 @@ def display():
     # real world-এ এটা কোথায় দেখা যায়: গেমের render loop — clear → scene → UI → swap
     glClear(GL_COLOR_BUFFER_BIT)
 
-    _draw_room("samee", config.SAMEE_ORIGIN[0], mirror=False)                 # translate(2, 2)
-    _draw_room("rifat", config.RIFAT_ORIGIN[0] + config.ROOM_W, mirror=True)  # translate(97+93, 2) + reflect
+    t = anim_time()   # টাইপিং অ্যানিমেশনের জন্য বর্তমান সময়
+    _draw_room("samee", config.SAMEE_ORIGIN[0], False, samee_working, t)                 # translate(2, 2)
+    _draw_room("rifat", config.RIFAT_ORIGIN[0] + config.ROOM_W, True, rifat_working, t)  # translate(97+93, 2) + reflect
 
     _draw_divider()
     _draw_frame()
@@ -197,22 +217,28 @@ def _tick_fps():
         _fps_t0 = now
 
 
-def _idle():
-    # কী করছে: অলস সময়ে বারবার রিড্র চায় (glutPostRedisplay)
-    # কেন লাগছে: টানা রেন্ডার হলে তবেই FPS মাপা যায়; Phase 6-এ এটি timer দিয়ে বদলাবে
-    # real world-এ এটা কোথায় দেখা যায়: গেম লুপ প্রতিনিয়ত নতুন ফ্রেম চায়
+def timer(value):
+    # কী করছে: প্রতি ~16ms পর রিড্র চায় (glutPostRedisplay) ও নিজেকে আবার schedule করে
+    # কেন লাগছে: টাইপিং অ্যানিমেশন চলতে টানা ফ্রেম দরকার; ~16ms ≈ 60 FPS
+    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের fixed-interval tick; Phase 6-এ dt সহ পূর্ণ হবে
     glutPostRedisplay()
+    glutTimerFunc(16, timer, 0)
 
 
 def keyboard(key, x, y):
-    # কী করছে: ESC চাপলে অ্যাপ বন্ধ করছে (x, y = মাউসের অবস্থান, এখন লাগছে না)
-    # কেন লাগছে: ইউজারকে উইন্ডো বন্ধ করার সহজ উপায় দিতে হয়
-    # real world-এ এটা কোথায় দেখা যায়: প্রায় সব ডেস্কটপ অ্যাপে ESC/বন্ধ বোতাম দিয়ে বের হওয়া যায়
+    # কী করছে: ESC → বন্ধ; '1' → Samee-কে, '2' → Rifat-কে IN_BED/WORKING-এর মধ্যে তাৎক্ষণিক টগল
+    # কেন লাগছে: Phase 5-এ animation ছাড়াই দুই অবস্থা যাচাই/ডেমো করতে কী দিয়ে টগল দরকার
+    # real world-এ এটা কোথায় দেখা যায়: ডেমো/ডিবাগ কী দিয়ে দ্রুত state পাল্টানো
+    global samee_working, rifat_working
     if key == ESC:
         if glutLeaveMainLoop is not None:
             glutLeaveMainLoop()   # freeglut-এ মেইন লুপ পরিষ্কারভাবে থামায়
         else:
             sys.exit(0)
+    elif key == b"1":
+        samee_working = not samee_working
+    elif key == b"2":
+        rifat_working = not rifat_working
 
 
 def main():
@@ -231,7 +257,7 @@ def main():
 
     glutDisplayFunc(display)                          # প্রতি ফ্রেমে display() ডাকবে
     glutKeyboardFunc(keyboard)                        # কী চাপলে keyboard() ডাকবে
-    glutIdleFunc(_idle)                               # টানা রিড্র (FPS মাপতে; Phase 10-এ সরাবে)
+    glutTimerFunc(16, timer, 0)                       # ~60 FPS টাইমার (Phase 6-এ dt সহ পূর্ণ হবে)
 
     glutMainLoop()                                    # ইভেন্ট লুপ শুরু; ESC না চাপা পর্যন্ত চলবে
 

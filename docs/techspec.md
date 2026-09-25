@@ -313,9 +313,11 @@ Not part of the app; used to verify each phase.
 Renders **one frame of the current `display()`** to a PNG, without opening an interactive window loop (it creates a GLUT context, draws one frame, reads the framebuffer, and exits).
 
 ```
-python tools/snapshot.py out.png
+python tools/snapshot.py out.png [--samee idle|work] [--rifat idle|work] [--t 0.0]
 ```
 
+- `--samee` / `--rifat` set each room's state (`idle` = asleep, `work` = working). Default `idle`.
+- `--t` sets a **fake animation clock** in seconds (frozen), so time-based frames such as the typing hands can be checked deterministically (e.g. `--t 0.0` vs `--t 0.15`).
 - Depends on **Pillow**, listed in `requirements-dev.txt` (kept out of `requirements.txt` so the app itself needs no extra packages). Install with `pip install -r requirements-dev.txt`.
 - Because it calls the real `main.display()`, whatever the app draws this phase is what the snapshot shows.
 - Reads the front buffer after the frame is drawn and flips vertically (OpenGL's origin is bottom-left, image files are top-left).
