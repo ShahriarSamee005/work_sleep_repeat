@@ -144,6 +144,136 @@ TEXT_DIM = "#a99bb5"         # আরও ম্লান টেক্সট
 GOLD = "#ffd27a"            # সক্রিয় সময়, কাজের সময়ের স্ট্যাটাস
 
 # =========================================================================
-# নোট: design.md §5-এর অবজেক্ট পজিশন (বিছানা/ডেস্ক ইত্যাদির কোঅর্ডিনেট) Phase 2-তে
-# room.py বানানোর সময় এখানে যোগ হবে — এখন যোগ করলে "build ahead" হয়ে যেত।
+# design.md §7 অতিরিক্ত স্প্রাইট রঙ + §5 প্রতিফলন রঙ (§4 প্যালেটে নাম-কলামে নেই)
 # =========================================================================
+MOON_LIGHT = "#f1e6c6"   # MOON স্প্রাইটের আলো (Y)
+MOON_EDGE = "#8a7f96"    # MOON স্প্রাইটের কিনারা (#)
+SUN_CORE = "#f2a54a"     # SUN স্প্রাইটের কমলা কোর (O)
+SUN_EDGE = "#7a4a1e"     # SUN স্প্রাইটের বাদামি কিনারা (#)
+SCREEN_REFLECT = "#3a4254"  # স্ক্রিন-অফ প্রতিফলন পিক্সেল (design §5; §4 প্যালেটে নেই)
+
+# =========================================================================
+# দৃশ্য এলাকা ও ফ্রেম (design §3)
+# =========================================================================
+SCENE_W = 192            # দৃশ্য এলাকার প্রস্থ (x 0–191); x 192–239 প্যানেল
+FRAME_PX = 2             # বাইরের ফ্রেমের পুরুত্ব (পিক্সেল)
+
+# =========================================================================
+# design.md §5 — অবজেক্ট পজিশন (সব রুম-লোকাল)। rect/box = (x, y, w, h), pixel = (x, y)
+# =========================================================================
+
+# ---- Wall & floor ----
+WALL_RECT = (0, 0, 93, 16)       # পুরো দেয়াল
+WALL_SHADOW = (0, 0, 93, 2)      # দেয়ালের উপরের ছায়া (WALL_D)
+WALL_HL = (0, 12, 93, 1)         # দেয়ালের হাইলাইট সারি (WALL_L)
+BASEBOARD = (0, 16, 93, 2)       # বেসবোর্ড (TRIM)
+BASEBOARD_EDGE = (0, 16, 93, 1)  # বেসবোর্ডের উপরের কিনারা (TRIM_L)
+FLOOR_TOP = 18                   # মেঝে শুরু (y)
+FLOOR_BOTTOM = 91                # মেঝে শেষ (y, inclusive)
+PLANK_H = 5                      # এক তক্তার উচ্চতা
+PLANK_SEAM_SHIFT = 13            # প্রতি সারিতে তক্তা-জোড়ার x শিফট
+PLANK_SEAM_MOD = 29              # তক্তা-জোড়া কত পিক্সেল পর পর
+PLANK_HL_SHIFT = 7               # হাইলাইট প্যাটার্নের x শিফট
+PLANK_HL_MOD = 11                # হাইলাইট প্যাটার্নের মডুলাস
+PLANK_HL_WIDTH = 4               # হাইলাইট কত পিক্সেল চওড়া
+
+# ---- Poster (দেয়ালে) ----
+POSTER_BOX = (32, 3, 10, 8)      # ফ্রেম (POSTER_FRAME)
+POSTER_SKY = (33, 4, 8, 3)       # আকাশ (POSTER_3)
+POSTER_STRIPE = (33, 7, 8, 1)    # স্ট্রাইপ (POSTER_2)
+POSTER_GROUND = (33, 8, 8, 2)    # মাটি (POSTER_1)
+POSTER_SUN = (38, 5)             # সূর্য পিক্সেল (POSTER_1)
+
+# ---- Plant (ডিভাইডারের পাশে কোণায়) ----
+POT_BOX = (84, 11, 7, 6)         # টব (POT)
+POT_SHADOW = (85, 15, 5, 1)      # টবের ছায়া (POT_D)
+PLANT_POS = (83, 3)              # পাতা স্প্রাইট
+
+# ---- Bed ----
+BED_HEADBOARD = (5, 9, 23, 8)    # হেডবোর্ড (WOOD)
+BED_HEADBOARD_HL = (6, 10, 21, 1)  # হাইলাইট (WOOD_L)
+BED_POST_L = (5, 9, 2, 8)        # বাঁ পোস্ট (OUTLINE)
+BED_POST_R = (26, 9, 2, 8)       # ডান পোস্ট (OUTLINE)
+BED_FRAME = (5, 16, 23, 47)      # ফ্রেম (WOOD_D)
+BED_MATTRESS = (7, 17, 19, 44)   # ম্যাট্রেস (SHEET)
+BED_PILLOW = (9, 18, 15, 7)      # বালিশ (PILLOW, SHEET_D আউটলাইন)
+BED_PILLOW_SHADOW = (10, 23, 13, 1)  # বালিশের নিচের ছায়া (SHEET_D)
+HEAD_SLEEP_POS = (12, 20)        # ঘুমন্ত মাথা স্প্রাইট
+# neat (idle) blanket
+BLANKET_RECT = (6, 27, 21, 34)   # কম্বল (BLANKET)
+BLANKET_FOLD_EDGE = (6, 27, 21, 2)  # ভাঁজ করা চাদরের কিনারা (SHEET)
+BLANKET_FOLD_LINE = (6, 29, 21, 1)  # ভাঁজের রেখা (BLANKET_L)
+BLANKET_SHADOW_L = (6, 30, 1, 31)   # বাঁ ছায়া (BLANKET_D)
+BLANKET_SHADOW_R = (26, 30, 1, 31)  # ডান ছায়া (BLANKET_D)
+BLANKET_SHADOW_B = (6, 59, 21, 2)   # নিচের ছায়া (BLANKET_D)
+BLANKET_WRINKLE_1 = (11, 36, 3, 1)  # ভাঁজ (BLANKET_D)
+BLANKET_WRINKLE_2 = (20, 50, 4, 1)  # ভাঁজ (BLANKET_D)
+BLANKET_WRINKLE_3 = (10, 54, 3, 1)  # ভাঁজ (BLANKET_L)
+# neat blanket-এর নিচে শরীরের বাম্প (design §5 সূত্র: w = int(6*sqrt(1-((y-42)/11)^2)))
+BUMP_Y0 = 32                     # বাম্প শুরু (y)
+BUMP_Y1 = 51                     # বাম্প শেষ (y, inclusive)
+BUMP_CY = 42                     # বাম্পের কেন্দ্র (y)
+BUMP_RY = 11                     # উল্লম্ব ব্যাসার্ধ
+BUMP_W = 6                       # প্রস্থ স্কেল
+BUMP_XL = 16                     # বাঁ পিক্সেল কেন্দ্র (x = 16 - w) → BLANKET_D
+BUMP_XR = 17                     # ডান পিক্সেল কেন্দ্র (x = 17 + w) → BLANKET_L
+
+# ---- Desk ----
+DESK_TOP = (44, 13, 33, 13)      # ডেস্ক টপ (DESK)
+DESK_HL = (45, 14, 31, 1)        # হাইলাইট (DESK_L)
+DESK_FRONT = (44, 25, 33, 3)     # সামনের কিনারা (OUTLINE)
+DESK_FRONT_IN = (45, 25, 31, 2)  # কিনারার ভেতর (DESK_D)
+DESK_LEG_L = (45, 28, 2, 3)      # বাঁ পা (OUTLINE)
+DESK_LEG_R = (74, 28, 2, 3)      # ডান পা (OUTLINE)
+MONITOR_BOX = (55, 3, 13, 10)    # মনিটর ফ্রেম (MONITOR)
+SCREEN_RECT = (56, 4, 11, 8)     # স্ক্রিন এলাকা (draw_screen)
+MONITOR_STAND = (60, 13, 3, 2)   # মনিটর স্ট্যান্ড (METAL)
+MONITOR_BASE = (58, 15, 7, 1)    # স্ট্যান্ড বেস (METAL)
+KEYBOARD_BOX = (55, 18, 13, 4)   # কীবোর্ড (KEY)
+KEY_X_START = 56                 # কী শুরুর x
+KEY_X_END = 66                   # কী শেষের x (inclusive)
+KEY_X_STEP = 2                   # কী-এর ব্যবধান
+KEY_ROW1_Y = 19                  # প্রথম সারির কী (y)
+KEY_ROW2_Y = 20                  # দ্বিতীয় সারির কী (y)
+LAMP_BASE = (46, 20, 5, 2)       # ল্যাম্প বেস (METAL)
+LAMP_POLE = (48, 12, 1, 8)       # ল্যাম্প পোল (METAL)
+LAMP_SHADE_TOP = (47, 8, 4, 1)   # শেডের উপর (OUTLINE)
+LAMP_SHADE_BODY = (46, 9, 6, 3)  # শেডের বডি (OUTLINE)
+LAMP_SHADE_IN = (47, 9, 4, 2)    # শেডের ভেতর (LAMP_OFF/ON/WARNING)
+LAMP_SHADE_RIM = (45, 11, 8, 1)  # শেডের rim (OUTLINE)
+LAMP_BULB_LINE = (46, 11, 6, 1)  # চালু থাকলে বাল্ব রেখা (LAMP_BULB)
+MUG_BOX = (70, 17, 4, 4)         # মগ (MUG)
+MUG_HANDLE_1 = (74, 18)          # হাতল পিক্সেল (OUTLINE)
+MUG_HANDLE_2 = (74, 19)          # হাতল পিক্সেল (OUTLINE)
+MUG_COFFEE = (71, 18)            # কফি পিক্সেল (WOOD)
+BOOKS_BOX = (69, 14, 7, 2)       # বই (BOOK)
+BOOK_TOP = (70, 13, 5, 1)        # উপরের বই (BOOK2)
+SCREEN_REFLECT_1 = (57, 5)       # স্ক্রিন-অফ প্রতিফলন পিক্সেল
+SCREEN_REFLECT_2 = (58, 5)       # স্ক্রিন-অফ প্রতিফলন পিক্সেল
+# স্ক্রিন-অন কোড লাইন: (x, y, length, color)
+CODE_LINES = [
+    (57, 5, 5, CODE),
+    (58, 6, 6, CODE2),
+    (58, 7, 4, CODE),
+    (57, 8, 7, CODE),
+    (58, 9, 3, CODE2),
+    (57, 10, 5, CODE),
+]
+
+# ---- Chair ----
+CHAIR_SEAT = (56, 31, 11, 7)     # সিট (CHAIR)
+CHAIR_SEAT_HL = (57, 32, 9, 1)   # হাইলাইট (CHAIR_L)
+CHAIR_BACK = (56, 37, 11, 4)     # পিঠ (CHAIR_D)
+CHAIR_POST = (61, 41, 1, 2)      # পোস্ট (METAL)
+CHAIR_BASE = (58, 43, 7, 1)      # বেস (OUTLINE)
+
+# ---- Rug ----
+RUG_BOX = (34, 54, 50, 27)       # রাগ (base রঙ)
+RUG_EDGE_TOP = (36, 56, 46, 1)   # উপরের হালকা কিনারা (light)
+RUG_EDGE_LEFT = (36, 56, 1, 23)  # বাঁ হালকা কিনারা (light)
+RUG_EDGE_BOTTOM = (36, 78, 46, 1)  # নিচের গাঢ় কিনারা (dark)
+RUG_EDGE_RIGHT = (81, 56, 1, 23)   # ডান গাঢ় কিনারা (dark)
+RUG_STITCH_Y = 67                # সেলাই ফোঁটার সারি (y)
+RUG_STITCH_X0 = 38               # সেলাই শুরুর x
+RUG_STITCH_X1 = 78               # সেলাই শেষের x (inclusive)
+RUG_STITCH_STEP = 4              # সেলাই ফোঁটার ব্যবধান

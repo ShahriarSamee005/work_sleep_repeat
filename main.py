@@ -10,6 +10,9 @@ from OpenGL.GL import (
     glEnable,
     glLoadIdentity,
     glMatrixMode,
+    glPopMatrix,
+    glPushMatrix,
+    glTranslatef,
     glViewport,
     GL_BLEND,
     GL_COLOR_BUFFER_BIT,
@@ -28,13 +31,13 @@ from OpenGL.GLUT import (
     glutKeyboardFunc,
     glutMainLoop,
     glutSwapBuffers,
-    GLUT_BITMAP_8_BY_13,
     GLUT_DOUBLE,
     GLUT_RGBA,
 )
 
 import config
-from pixel import draw_rect, draw_sprite, draw_text, hex_to_rgb
+import room
+from pixel import draw_rect, draw_sprite, hex_to_rgb
 from sprites import HEAD_SLEEP, HEAD_SLEEP_COLORS
 
 # glutLeaveMainLoop freeglut-এ আছে; না থাকলে fallback হিসেবে sys.exit ব্যবহার করব।
@@ -86,20 +89,38 @@ def init_gl():
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)   # স্বাভাবিক alpha blending সূত্র
 
 
+def _draw_frame():
+    # কী করছে: দৃশ্য এলাকার (x 0–191) চারপাশে ২-পিক্সেল OUTLINE ফ্রেম আঁকছে
+    # কেন লাগছে: রুমগুলোর বাইরে একটি পরিষ্কার গাঢ় সীমানা দেয় (design §3)
+    # real world-এ এটা কোথায় দেখা যায়: UI-তে কনটেন্ট এলাকার চারপাশে border/bezel
+    t, w, h = config.FRAME_PX, config.SCENE_W, config.GRID_H
+    draw_rect(0, 0, w, t, config.OUTLINE)          # উপরের বার
+    draw_rect(0, h - t, w, t, config.OUTLINE)      # নিচের বার
+    draw_rect(0, 0, t, h, config.OUTLINE)          # বাঁ বার
+    draw_rect(w - t, 0, t, h, config.OUTLINE)      # ডান বার
+
+
 def display():
-    # কী করছে: স্ক্রিন ক্লিয়ার করে (Phase 1) কিছু টেস্ট ড্রয়িং এঁকে দুই বাফার সোয়াপ করছে
-    # কেন লাগছে: গ্রিড, রঙ, স্প্রাইট ও টেক্সট হেল্পার ঠিকমতো কাজ করছে কি না তা যাচাই করতে
-    # real world-এ এটা কোথায় দেখা যায়: সব রেন্ডার লুপ প্রতি ফ্রেমে ক্লিয়ার → আঁকা → সোয়াপ করে
+    # কী করছে: স্ক্রিন ক্লিয়ার করে Samee-র রুম (translate 2,2) ও ঘুমন্ত মাথা এঁকে ফ্রেম বসিয়ে বাফার সোয়াপ করছে
+    # কেন লাগছে: Phase 2-তে একটি স্ট্যাটিক idle রুম দেখানো; matrix push/pop রুম-লোকাল কোঅর্ডিনেট দেয়
+    # real world-এ এটা কোথায় দেখা যায়: সিন গ্রাফ-এ প্রতিটি অবজেক্ট নিজের লোকাল স্পেসে এঁকে transform করা
     glClear(GL_COLOR_BUFFER_BIT)
 
-    # ------------------- TEMP TEST (Phase 1 যাচাই; Phase 2-তে সরিয়ে ফেলব) -------------------
-    # নোট: নিচের বিশুদ্ধ লাল/নীল হেক্স শুধু এই অস্থায়ী টেস্টের জন্য (কোঅর্ডিনেট দিক যাচাই),
-    #      কোনো আসল প্যালেট রঙ নয়; এই ব্লকসহ Phase 2-তে মুছে যাবে।
-    draw_rect(0, 0, 10, 10, "#ff0000")                   # লাল বাক্স → উপরে-বাঁয়ে থাকার কথা
-    draw_rect(230, 86, 10, 10, "#0000ff")                # নীল বাক্স → নিচে-ডানে থাকার কথা
-    draw_sprite(50, 40, HEAD_SLEEP, HEAD_SLEEP_COLORS)   # ঘুমন্ত মাথা → সোজা (উল্টো/মিরর নয়)
-    draw_text(196, 10, config.WINDOW_TITLE, config.TEXT, GLUT_BITMAP_8_BY_13)
-    # ----------------------------- END TEMP TEST -----------------------------
+    # ---- Samee-র রুম: translate(2, 2) matrix-এর ভেতরে (সব কোঅর্ডিনেট রুম-লোকাল) ----
+    glPushMatrix()
+    glTranslatef(config.SAMEE_ORIGIN[0], config.SAMEE_ORIGIN[1], 0)   # (2, 2, 0)
+    room.draw_wall_and_floor()
+    room.draw_decor()
+    room.draw_rug((config.SAMEE_RUG, config.SAMEE_RUG_D, config.SAMEE_RUG_L))  # grey-blue রাগ
+    room.draw_bed(messy=False)
+    room.draw_desk()
+    room.draw_chair()
+    room.draw_screen(on=False)
+    room.draw_lamp_shade(on=False, warn=False)
+    draw_sprite(*config.HEAD_SLEEP_POS, HEAD_SLEEP, HEAD_SLEEP_COLORS)  # বালিশে ঘুমন্ত মাথা
+    glPopMatrix()
+
+    _draw_frame()   # ফ্রেম translate-এর বাইরে (গ্লোবাল কোঅর্ডিনেটে)
 
     glutSwapBuffers()
 

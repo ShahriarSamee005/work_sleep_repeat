@@ -8,7 +8,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 |---|---|---|---|---|
 | 0 | Project setup | ✅ | ✅ | 2026-09-25 |
 | 1 | Grid and pixel helpers | ✅ | ✅ | 2026-09-25 |
-| 2 | One static room | ⬜ | ⬜ | |
+| 2 | One static room | ✅ | ✅ | 2026-09-25 |
 | 3 | Two rooms + display lists | ⬜ | ⬜ | |
 | 4 | Hand-written algorithms | ⬜ | ⬜ | |
 | 5 | Working state (no animation) | ⬜ | ⬜ | |
@@ -39,13 +39,14 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - Gate passed 2026-09-25. Bullet "•" fixed inside draw_text (draws a small square + advances one char width).
 
 ### Phase 2: One static room
-- [ ] Wall, baseboard, floor planks
-- [ ] Poster, plant
-- [ ] Bed with sleeping head
-- [ ] Desk, monitor (off), keyboard, lamp (off), mug, books
-- [ ] Chair, rug
-- [ ] Matches the idle mockup
+- [x] Wall, baseboard, floor planks
+- [x] Poster, plant
+- [x] Bed with sleeping head
+- [x] Desk, monitor (off), keyboard, lamp (off), mug, books
+- [x] Chair, rug
+- [x] Matches the idle mockup (pixel-checked bed/desk/rug/floor; layout verified)
 - [ ] **Changed by hand:** one object's color and position
+- Gate passed 2026-09-25. Rug stitch dots use the rug's dark edge color (matches mockup). No §5 coordinate changed; WALK_A sprite width normalized 10→9 (see Discoveries).
 
 ### Phase 3: Two rooms + display lists
 - [ ] Rifat's room mirrored with glScalef(-1, 1, 1)
@@ -140,6 +141,7 @@ Candidates to watch for:
 |---|---|---|
 | 2026-09-25 | GLUT bitmap fonts only support char codes 1–255; "•" (U+2022) renders nothing and advances 0 px | Old bitmap fonts carry a 256-glyph table, so any Unicode character above 255 is silently skipped. |
 | 2026-09-25 | `glutCreateWindow` needs a `bytes` title, not a `str` (else `ctypes.ArgumentError`) | PyOpenGL passes the title straight to a C `char*`, which only accepts bytes, so the string must be `.encode()`d first. |
+| 2026-09-25 | design §7 WALK_A leg rows were 10 px wide while STAND is 9 px | The design doc had a stray trailing dot; I trimmed it so the walk frame lines up with the standing sprite. |
 
 ## Future ideas → reflection Q4 "One more week?"
 
