@@ -6,7 +6,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 
 | Phase | Name | Status | Gate passed | Date |
 |---|---|---|---|---|
-| 0 | Project setup | ⬜ | ⬜ | |
+| 0 | Project setup | ✅ | ✅ | 2026-09-25 |
 | 1 | Grid and pixel helpers | ⬜ | ⬜ | |
 | 2 | One static room | ⬜ | ⬜ | |
 | 3 | Two rooms + display lists | ⬜ | ⬜ | |
@@ -23,10 +23,10 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 ## Phase checklists
 
 ### Phase 0: Project setup
-- [ ] Folder structure created
-- [ ] requirements.txt, .env.example, .gitignore
-- [ ] `--me` and `--offline` arguments
-- [ ] Window opens, ESC quits
+- [x] Folder structure created (modules at root, one-line docstring each)
+- [x] requirements.txt, .env.example, .gitignore
+- [x] `--me` and `--offline` arguments
+- [x] Window opens, ESC quits (ESC close confirmed manually 2026-09-25)
 - [ ] GitHub repo created and first commit pushed
 - [ ] **Understood:** glutInit, display mode, main loop
 
@@ -120,7 +120,7 @@ Write it down while it's fresh. The best reflection answers come from here.
 
 | Date | Phase | What went wrong | What caused it | How I fixed it |
 |---|---|---|---|---|
-| | | | | |
+| 2026-09-25 | 0 | `glutCreateWindow` crashed: `'str' object cannot be interpreted as ctypes.c_char_p` | PyOpenGL 3.1.10 passes the title straight to a C `c_char_p`, which needs `bytes`, not a Python `str` | Encoded the title with `.encode("utf-8")` before passing it to `glutCreateWindow` |
 
 ## Lessons → reflection Q2 "What did this teach you that theory couldn't?"
 
