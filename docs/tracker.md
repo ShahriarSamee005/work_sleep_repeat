@@ -10,7 +10,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 1 | Grid and pixel helpers | ✅ | ✅ | 2026-09-25 |
 | 2 | One static room | ✅ | ✅ | 2026-09-25 |
 | 3 | Two rooms + display lists | ✅ | ✅ | 2026-09-25 |
-| 4 | Hand-written algorithms | ⬜ | ⬜ | |
+| 4 | Hand-written algorithms | ✅ | ✅ | 2026-09-25 |
 | 5 | Working state (no animation) | ⬜ | ⬜ | |
 | 6 | Animation | ⬜ | ⬜ | |
 | 7 | Lighting + debug view | ⬜ | ⬜ | |
@@ -59,14 +59,15 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - Gate passed 2026-09-25. Mirror pixel-checked (3 pairs match; rug differs). hex_to_rgb memoization kept.
 
 ### Phase 4: Hand-written algorithms
-- [ ] bresenham_line
-- [ ] cubic_bezier, bezier_points, ease_in_out
-- [ ] boundary_fill (stack-based)
-- [ ] scanline_circle
-- [ ] compute_outcode, cohen_sutherland
-- [ ] Self-test passes
-- [ ] Messy blanket built with line + fill
-- [ ] **Can explain every line of every algorithm**
+- [x] bresenham_line (all 8 directions)
+- [x] cubic_bezier, bezier_points, ease_in_out
+- [x] boundary_fill (stack-based, 4-connected)
+- [x] scanline_circle
+- [x] compute_outcode, cohen_sutherland (named bits; y-down TOP=small y)
+- [x] Self-test passes (20/20 PASS)
+- [x] Messy blanket built with line + fill (mask vs formula differs by 19 cells, diagonal only)
+- [ ] **Can explain every line of every algorithm** (see docs/algorithms-explained.md)
+- Gate passed 2026-09-25. docs/algorithms-explained.md written for viva prep. Blanket diagonal kept as-is.
 
 ### Phase 5: Working state
 - [ ] Sitting pose and arms

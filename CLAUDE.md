@@ -15,6 +15,8 @@ All specs live in docs/: prd.md, design.md, techspec.md, appflow.md, plan.md, tr
 - CG algorithms in algorithms.py are written by hand. No library does the algorithm.
 - Keep code simple and readable. The student must explain every line in a viva.
 - Only do the current phase. Do not build ahead.
+- Never use `git add -A` or `git add .`. Stage files explicitly by name. Before every commit,
+  show `git status` and stop if any file is unexpectedly deleted or modified.
 
 ## When something is wrong
 - Diagnose first: explain the cause before changing code.

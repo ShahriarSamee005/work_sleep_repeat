@@ -8,6 +8,7 @@ import math
 from OpenGL.GL import glEndList, glGenLists, glNewList, GL_COMPILE
 
 import sprites
+from algorithms import boundary_fill, bresenham_line
 from pixel import draw_box, draw_pixel, draw_rect, draw_sprite
 
 import config
@@ -95,13 +96,131 @@ def _draw_blanket_neat():
     draw_rect(*config.BLANKET_WRINKLE_3, config.BLANKET_L)
 
 
+def _messy_edge(y):
+    # কী করছে: design §5-এর সূত্রে এই সারিতে (y) কম্বলের বাঁ প্রান্ত (edge) কোন x-এ, তা দেয়
+    # কেন লাগছে: এলোমেলো কম্বল কর্ণ বরাবর নিচে ঠেলা; প্রতি সারিতে বাঁ প্রান্ত বদলায়
+    # real world-এ এটা কোথায় দেখা যায়: প্রোসিজারাল shape — সূত্র দিয়ে প্রতি সারির সীমা বের করা
+    zig = (config.MESSY_EDGE_ZIG_ADD
+           if y % config.MESSY_EDGE_ZIG_MOD < config.MESSY_EDGE_ZIG_LT else 0)
+    return (config.MESSY_EDGE_BASE
+            + max(0, int((config.MESSY_EDGE_PIVOT - y) * config.MESSY_EDGE_SLOPE))
+            + zig)
+
+
+def messy_formula_mask():
+    # কী করছে: design §5-এর সূত্র সরাসরি ব্যবহার করে কম্বল কোন কোন ঘরে থাকবে তার সেট দেয়
+    # কেন লাগছে: line+fill দিয়ে বানানো মাস্কের সাথে মিলিয়ে দেখতে (কতটা পার্থক্য) রেফারেন্স লাগে
+    # real world-এ এটা কোথায় দেখা যায়: অ্যালগরিদমের ফল "ground truth"-এর সাথে মেলানো (testing)
+    cells = set()
+    for y in range(config.MESSY_Y0, config.MESSY_Y1 + 1):
+        start = max(config.MESSY_FILL_MIN_X, _messy_edge(y))
+        for x in range(start, config.MESSY_X_RIGHT + 1):
+            cells.add((x, y))
+    return cells
+
+
+def messy_linefill_mask():
+    # কী করছে: কম্বলের সীমানা কয়েকটি bresenham_line-এ এঁকে boundary_fill দিয়ে ভেতর ভরে মাস্ক বানায়
+    # কেন লাগছে: এটাই "color fill" CG technique-এর প্রয়োগ — রেখা দিয়ে আকৃতি, তারপর ফিল দিয়ে ভেতর
+    # real world-এ এটা কোথায় দেখা যায়: vector আঁকা টুলে outline এঁকে bucket দিয়ে ভরাট
+    gx0 = config.MESSY_FILL_MIN_X - 1          # গ্রিডে ১-ঘর margin, যাতে fill ঘেরা থাকে
+    gx1 = config.MESSY_X_RIGHT + 1
+    gy0 = config.MESSY_Y0 - 1
+    gy1 = config.MESSY_Y1 + 1
+    w = gx1 - gx0 + 1
+    h = gy1 - gy0 + 1
+    EMPTY, BORDER, FILL = 0, 1, 2
+    grid = [[EMPTY] * w for _ in range(h)]
+
+    def mark(x, y):
+        grid[y - gy0][x - gx0] = BORDER        # রুম-লোকাল (x,y) → গ্রিড ইনডেক্স
+
+    top_y = config.MESSY_Y0
+    bot_y = config.MESSY_Y1
+    right_x = config.MESSY_X_RIGHT
+    left_x = config.MESSY_EDGE_BASE            # 7 = কর্ণের নিচের প্রান্তের x
+    pivot = config.MESSY_EDGE_PIVOT            # যেখানে কর্ণ শেষ
+    diag_top = _messy_edge(top_y)              # y=30-এ edge (কর্ণের উপরের x)
+
+    # কম্বলের সীমানা = ৫টি bresenham সেগমেন্টে বন্ধ polygon:
+    outline = [
+        (left_x, pivot, diag_top, top_y),      # ১) কর্ণ উপরের ধার
+        (diag_top, top_y, right_x, top_y),     # ২) উপরের ছোট অনুভূমিক ধার
+        (right_x, top_y, right_x, bot_y),      # ৩) ডান খাড়া ধার
+        (right_x, bot_y, left_x, bot_y),       # ৪) নিচের অনুভূমিক ধার
+        (left_x, bot_y, left_x, pivot),        # ৫) বাঁ খাড়া ধার (বিছানার পাশ)
+    ]
+    for x0, y0, x1, y1 in outline:
+        for px, py in bresenham_line(x0, y0, x1, y1):
+            mark(px, py)
+
+    # ভেতরের একটি seed থেকে ভরাট (seed নিশ্চিতভাবে polygon-এর ভেতরে)
+    seed_x, seed_y = right_x - 2, bot_y - 3
+    boundary_fill(grid, seed_x - gx0, seed_y - gy0, FILL, BORDER)
+
+    mask = set()
+    for gy in range(h):
+        for gx in range(w):
+            if grid[gy][gx] != EMPTY:          # BORDER বা FILL = কম্বলের অংশ
+                mask.add((gx + gx0, gy + gy0))
+    return mask
+
+
+def _messy_cell_color(x, y, edge):
+    # কী করছে: এলোমেলো কম্বলের এক ঘরের shading রঙ ঠিক করছে (design §5-এর নিয়মে)
+    # কেন লাগছে: কম্বলের বাঁ ধারে হাইলাইট, ডান/নিচে ছায়া, মাঝে ভাঁজ — এতে ত্রিমাত্রিক দেখায়
+    # real world-এ এটা কোথায় দেখা যায়: পিক্সেল আর্টে shading দিয়ে কাপড়ের ভাঁজ বোঝানো
+    color = config.BLANKET
+    if x == edge:                              # বাঁ ধারে হাইলাইট (মাঝে মাঝে গাঢ়)
+        color = config.BLANKET_D if y % config.MESSY_EDGE_D_MOD == 0 else config.BLANKET_L
+    if x == config.MESSY_X_RIGHT or y >= config.MESSY_SHADOW_Y:  # ডান/নিচের ছায়া
+        color = config.BLANKET_D
+    if ((x + y) % config.MESSY_WRINKLE_MOD == 0
+            and x > edge + config.MESSY_WRINKLE_OFFSET):         # ভাঁজ
+        color = config.BLANKET_D
+    return color
+
+
 def _draw_blanket_messy():
-    # কী করছে: এলোমেলো কম্বলের একটি সাধারণ placeholder আঁকছে
-    # কেন লাগছে: draw_bed(messy=True) কল হলে কিছু দেখাতে হয়; Phase 4-এ এটি bresenham_line +
-    #           boundary_fill দিয়ে design §5-এর প্রকৃত এলোমেলো কম্বলে বদলাবে
-    # real world-এ এটা কোথায় দেখা যায়: প্রোটোটাইপে আসল আঁকার আগে সাদামাটা placeholder রাখা
-    draw_rect(*config.BLANKET_RECT, config.BLANKET)
-    draw_rect(*config.BLANKET_SHADOW_B, config.BLANKET_D)
+    # কী করছে: খালি বিছানার এলোমেলো রূপ আঁকছে — চাদরের ভাঁজ, বালিশের দাগ, line+fill কম্বল ও ঝুলন্ত কোণা
+    # কেন লাগছে: কেউ বিছানায় নেই (কাজ করছে) বোঝাতে; কম্বলের আকৃতি line+fill CG technique-এ তৈরি
+    # real world-এ এটা কোথায় দেখা যায়: গেমে একই অবজেক্টের ভিন্ন state (গোছানো/এলোমেলো) আঁকা
+    draw_rect(*config.MESSY_SHEET_1, config.SHEET_D)   # চাদরের ভাঁজ
+    draw_rect(*config.MESSY_SHEET_2, config.SHEET_D)
+    draw_rect(*config.MESSY_SHEET_3, config.SHEET_D)
+    for dx, dy in config.MESSY_DENT:                   # বালিশের দাগ
+        draw_pixel(dx, dy, config.SHEET_D)
+
+    mask = messy_linefill_mask()                       # line+fill দিয়ে কম্বলের আকৃতি
+    rows = {}
+    for x, y in mask:
+        rows.setdefault(y, []).append(x)
+
+    # প্রতি সারিতে একই রঙের পরপর ঘরকে এক rect (run) করে আঁকি (floor-এর মতো দ্রুত)
+    for y in range(config.MESSY_Y0, config.MESSY_Y1 + 1):
+        xs = rows.get(y)
+        if not xs:
+            continue
+        edge = _messy_edge(y)
+        run_start = None
+        run_color = None
+        x_lo, x_hi = min(xs), max(xs)
+        for x in range(x_lo, x_hi + 1):
+            if (x, y) not in mask:                     # ফাঁক (সাধারণত থাকে না) → run শেষ
+                if run_start is not None:
+                    draw_rect(run_start, y, x - run_start, 1, run_color)
+                    run_start = None
+                continue
+            color = _messy_cell_color(x, y, edge)
+            if run_start is None:
+                run_start, run_color = x, color
+            elif color != run_color:
+                draw_rect(run_start, y, x - run_start, 1, run_color)
+                run_start, run_color = x, color
+        if run_start is not None:
+            draw_rect(run_start, y, x_hi + 1 - run_start, 1, run_color)
+
+    draw_rect(*config.MESSY_HANG, config.BLANKET_D)    # ঝুলে থাকা কোণা
 
 
 def draw_bed(messy=False):

@@ -227,6 +227,27 @@ BUMP_W = 6                       # প্রস্থ স্কেল
 BUMP_XL = 16                     # বাঁ পিক্সেল কেন্দ্র (x = 16 - w) → BLANKET_D
 BUMP_XR = 17                     # ডান পিক্সেল কেন্দ্র (x = 17 + w) → BLANKET_L
 
+# ---- Messy (working) blanket — design §5 (Phase 4: line + fill দিয়ে বানানো) ----
+MESSY_Y0 = 30                    # কম্বলের সারি শুরু (y)
+MESSY_Y1 = 60                    # কম্বলের সারি শেষ (y, inclusive)
+MESSY_X_RIGHT = 26              # কম্বলের ডান প্রান্ত (x)
+MESSY_EDGE_BASE = 7            # edge সূত্রের ভিত্তি: edge = 7 + ...
+MESSY_EDGE_SLOPE = 0.85       # কর্ণ ঢাল
+MESSY_EDGE_PIVOT = 52        # যে y-তে কর্ণ শেষ হয়ে edge = base হয়
+MESSY_EDGE_ZIG_MOD = 7      # edge-এর ছোট zigzag-এর পিরিয়ড (y % 7)
+MESSY_EDGE_ZIG_LT = 2      # y % 7 < 2 হলে zigzag যোগ
+MESSY_EDGE_ZIG_ADD = 2    # zigzag কত পিক্সেল ভেতরে ঠেলে
+MESSY_FILL_MIN_X = 6      # ভরাটের বাঁ সীমা: x শুরু = max(6, edge)
+MESSY_SHADOW_Y = 59      # y >= 59 → নিচের ছায়া (BLANKET_D)
+MESSY_EDGE_D_MOD = 3    # y % 3 == 0 হলে edge হাইলাইট গাঢ় (BLANKET_D)
+MESSY_WRINKLE_MOD = 9  # (x + y) % 9 == 0 → ভাঁজ
+MESSY_WRINKLE_OFFSET = 2  # এবং x > edge + 2 হলে তবেই ভাঁজ
+MESSY_HANG = (6, 57, 2, 4)  # ঝুলে থাকা কোণা (BLANKET_D)
+MESSY_DENT = [(15, 21), (16, 21), (17, 21), (18, 21), (14, 22)]  # বালিশের দাগ (SHEET_D)
+MESSY_SHEET_1 = (9, 29, 5, 1)   # চাদরের ভাঁজ (SHEET_D)
+MESSY_SHEET_2 = (12, 33, 6, 1)  # চাদরের ভাঁজ (SHEET_D)
+MESSY_SHEET_3 = (8, 38, 4, 1)   # চাদরের ভাঁজ (SHEET_D)
+
 # ---- Desk ----
 DESK_TOP = (44, 13, 33, 13)      # ডেস্ক টপ (DESK)
 DESK_HL = (45, 14, 31, 1)        # হাইলাইট (DESK_L)
