@@ -11,7 +11,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 2 | One static room | ✅ | ✅ | 2026-09-25 |
 | 3 | Two rooms + display lists | ✅ | ✅ | 2026-09-25 |
 | 4 | Hand-written algorithms | ✅ | ✅ | 2026-09-25 |
-| 5 | Working state (no animation) | 🟨 | ⬜ | 2026-09-25 |
+| 5 | Working state (no animation) | ✅ | ✅ | 2026-09-25 |
 | 6 | Animation | ⬜ | ⬜ | |
 | 7 | Lighting + debug view | ⬜ | ⬜ | |
 | 8 | Panel | ⬜ | ⬜ | |
@@ -75,7 +75,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - [x] Screen on with code lines
 - [x] Lamp shade on (with bulb line)
 - [x] Keys 1/2 switch instantly (IN_BED ↔ WORKING); glutTimerFunc(16) drives typing
-- snapshot.py upgraded: --samee/--rifat idle|work, --t <sec>. Gate awaiting user confirm.
+- snapshot.py upgraded: --samee/--rifat idle|work, --t <sec>. Gate passed 2026-09-25 (keys 1/2 tested live).
 
 ### Phase 6: Animation
 - [ ] Character class with 8 states
