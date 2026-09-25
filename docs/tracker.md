@@ -92,7 +92,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 ### Phase 7: Lighting + debug
 - [x] Darkness overlay (idle 0.40, working 0.30; drawn per room, room-local NIGHT quad)
 - [x] Glow circles (5× scanline_circle at GLOW_CENTER, per-cell clipped to room rect, alpha-stacked)
-- [x] Rays (12 rays fan from lamp, Cohen-Sutherland clip to (0,0,92,91), drawn with bresenham_line) — **debug view only** now; removed from the normal view by request (glow-only), draw_rays/cohen_sutherland/bresenham_line kept
+- [x] Rays (12 rays fan from lamp, Cohen-Sutherland clip to (0,0,92,91), drawn with bresenham_line)
 - [x] Emissive parts on top (off-state screen/lamp dimmed under overlay; on-state redrawn after lighting)
 - [x] Screen glow (small GLOW_SCREEN circle at monitor, low alpha, monitor_on only)
 - [x] Debug view (D = grid + Bezier + control points + clip rects + red-unclipped/green-clipped rays) and grid only (G)
