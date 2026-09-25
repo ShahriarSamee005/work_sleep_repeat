@@ -1,9 +1,24 @@
-"""main.py — এন্ট্রি পয়েন্ট: আর্গুমেন্ট পার্স, GLUT উইন্ডো ও মেইন লুপ (Phase 0)।"""
+"""main.py — এন্ট্রি পয়েন্ট: আর্গুমেন্ট পার্স, GLUT উইন্ডো, 2D প্রজেকশন ও মেইন লুপ (Phase 1)।"""
 
 import argparse
 import sys
 
-from OpenGL.GL import glClear, glClearColor, GL_COLOR_BUFFER_BIT
+from OpenGL.GL import (
+    glBlendFunc,
+    glClear,
+    glClearColor,
+    glEnable,
+    glLoadIdentity,
+    glMatrixMode,
+    glViewport,
+    GL_BLEND,
+    GL_COLOR_BUFFER_BIT,
+    GL_MODELVIEW,
+    GL_ONE_MINUS_SRC_ALPHA,
+    GL_PROJECTION,
+    GL_SRC_ALPHA,
+)
+from OpenGL.GLU import gluOrtho2D
 from OpenGL.GLUT import (
     glutCreateWindow,
     glutDisplayFunc,
@@ -13,11 +28,14 @@ from OpenGL.GLUT import (
     glutKeyboardFunc,
     glutMainLoop,
     glutSwapBuffers,
+    GLUT_BITMAP_8_BY_13,
     GLUT_DOUBLE,
     GLUT_RGBA,
 )
 
 import config
+from pixel import draw_rect, draw_sprite, draw_text, hex_to_rgb
+from sprites import HEAD_SLEEP, HEAD_SLEEP_COLORS
 
 # glutLeaveMainLoop freeglut-এ আছে; না থাকলে fallback হিসেবে sys.exit ব্যবহার করব।
 try:
@@ -50,20 +68,39 @@ def parse_args():
     return parser.parse_args()
 
 
-def hex_to_rgb01(hex_color):
-    # কী করছে: "#231c2b"-এর মতো হেক্স রঙকে 0–1 রেঞ্জের (r, g, b) ফ্লোটে বদলাচ্ছে
-    # কেন লাগছে: glClearColor 0–1 ফ্লোট চায়, কিন্তু আমরা রঙ config.py-তে হেক্স হিসেবে রাখি
-    # real world-এ এটা কোথায় দেখা যায়: CSS/ডিজাইন টুল হেক্স কোডকে GPU-র ফ্লোট কালারে রূপান্তর করে
-    # (Phase 1-এ এই কাজ pixel.hex_to_rgb-তে যাবে; তখন main এখান থেকে import করবে।)
-    h = hex_color.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+def init_gl():
+    # কী করছে: ব্যাকগ্রাউন্ড রঙ, ভিউপোর্ট, 2D প্রজেকশন (y=0 উপরে) ও alpha blending সেট করছে
+    # কেন লাগছে: gluOrtho2D গ্রিড কোঅর্ডিনেটকে স্ক্রিনে ম্যাপ করে; blending আলো/ছায়ায় স্বচ্ছতা দেয়
+    # real world-এ এটা কোথায় দেখা যায়: প্রতিটি রেন্ডারারের init-এ ক্যামেরা/প্রজেকশন ও blend state সেট হয়
+    r, g, b = hex_to_rgb(config.OUTLINE)                # ব্যাকগ্রাউন্ড রঙ config থেকে (#231c2b)
+    glClearColor(r, g, b, 1.0)
+
+    glViewport(0, 0, config.WINDOW_W, config.WINDOW_H)  # পুরো উইন্ডো জুড়ে আঁকা হবে
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    gluOrtho2D(0, config.GRID_W, config.GRID_H, 0)      # left,right,bottom,top → y=0 উপরে (উল্টানো)
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+
+    glEnable(GL_BLEND)                                   # স্বচ্ছতা চালু
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)   # স্বাভাবিক alpha blending সূত্র
 
 
 def display():
-    # কী করছে: পুরো উইন্ডোকে ব্যাকগ্রাউন্ড রঙে মুছে দুই বাফার সোয়াপ করছে
-    # কেন লাগছে: প্রতি ফ্রেমে আগের ছবি মুছে নতুন আঁকতে হয়; Phase 0-তে শুধু ফাঁকা রঙ দেখাই
-    # real world-এ এটা কোথায় দেখা যায়: সব গেম/অ্যাপের রেন্ডার লুপ প্রতি ফ্রেমে স্ক্রিন ক্লিয়ার করে
+    # কী করছে: স্ক্রিন ক্লিয়ার করে (Phase 1) কিছু টেস্ট ড্রয়িং এঁকে দুই বাফার সোয়াপ করছে
+    # কেন লাগছে: গ্রিড, রঙ, স্প্রাইট ও টেক্সট হেল্পার ঠিকমতো কাজ করছে কি না তা যাচাই করতে
+    # real world-এ এটা কোথায় দেখা যায়: সব রেন্ডার লুপ প্রতি ফ্রেমে ক্লিয়ার → আঁকা → সোয়াপ করে
     glClear(GL_COLOR_BUFFER_BIT)
+
+    # ------------------- TEMP TEST (Phase 1 যাচাই; Phase 2-তে সরিয়ে ফেলব) -------------------
+    # নোট: নিচের বিশুদ্ধ লাল/নীল হেক্স শুধু এই অস্থায়ী টেস্টের জন্য (কোঅর্ডিনেট দিক যাচাই),
+    #      কোনো আসল প্যালেট রঙ নয়; এই ব্লকসহ Phase 2-তে মুছে যাবে।
+    draw_rect(0, 0, 10, 10, "#ff0000")                   # লাল বাক্স → উপরে-বাঁয়ে থাকার কথা
+    draw_rect(230, 86, 10, 10, "#0000ff")                # নীল বাক্স → নিচে-ডানে থাকার কথা
+    draw_sprite(50, 40, HEAD_SLEEP, HEAD_SLEEP_COLORS)   # ঘুমন্ত মাথা → সোজা (উল্টো/মিরর নয়)
+    draw_text(196, 10, config.WINDOW_TITLE, config.TEXT, GLUT_BITMAP_8_BY_13)
+    # ----------------------------- END TEMP TEST -----------------------------
+
     glutSwapBuffers()
 
 
@@ -79,24 +116,23 @@ def keyboard(key, x, y):
 
 
 def main():
-    # কী করছে: আর্গুমেন্ট পড়ে GLUT চালু করে 1440x576 উইন্ডো খোলে ও কলব্যাক বাঁধে, তারপর মেইন লুপে ঢোকে
-    # কেন লাগছে: এটাই অ্যাপের শুরু — উইন্ডো, রঙ ও ইনপুট হ্যান্ডলার সেট করে সবকিছু চালু করে
+    # কী করছে: আর্গুমেন্ট পড়ে GLUT চালু করে উইন্ডো খোলে, init_gl() ডাকে, কলব্যাক বাঁধে ও মেইন লুপে ঢোকে
+    # কেন লাগছে: এটাই অ্যাপের শুরু — উইন্ডো, প্রজেকশন, রঙ ও ইনপুট হ্যান্ডলার সেট করে সবকিছু চালু করে
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
     args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
 
-    glutInit([sys.argv[0]])                        # GLUT চালু; নিজের --me/--offline ফ্ল্যাগ GLUT-কে দিচ্ছি না
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA)   # ডাবল বাফার + RGBA কালার মোড
+    glutInit([sys.argv[0]])                          # GLUT চালু; নিজের ফ্ল্যাগ GLUT-কে দিচ্ছি না
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA)     # ডাবল বাফার + RGBA কালার মোড
     glutInitWindowSize(config.WINDOW_W, config.WINDOW_H)
     # glutCreateWindow C-লেভেলে bytes (c_char_p) চায়, তাই str টাইটেলকে UTF-8 bytes-এ encode করছি
     glutCreateWindow(config.WINDOW_TITLE.encode("utf-8"))
 
-    r, g, b = hex_to_rgb01(config.OUTLINE)         # ব্যাকগ্রাউন্ড রঙ config থেকে (#231c2b)
-    glClearColor(r, g, b, 1.0)
+    init_gl()                                         # প্রজেকশন, রঙ ও blending সেটআপ
 
-    glutDisplayFunc(display)                        # প্রতি ফ্রেমে display() ডাকবে
-    glutKeyboardFunc(keyboard)                      # কী চাপলে keyboard() ডাকবে
+    glutDisplayFunc(display)                          # প্রতি ফ্রেমে display() ডাকবে
+    glutKeyboardFunc(keyboard)                        # কী চাপলে keyboard() ডাকবে
 
-    glutMainLoop()                                  # ইভেন্ট লুপ শুরু; ESC না চাপা পর্যন্ত চলবে
+    glutMainLoop()                                    # ইভেন্ট লুপ শুরু; ESC না চাপা পর্যন্ত চলবে
 
 
 if __name__ == "__main__":

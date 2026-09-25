@@ -7,7 +7,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | Phase | Name | Status | Gate passed | Date |
 |---|---|---|---|---|
 | 0 | Project setup | ✅ | ✅ | 2026-09-25 |
-| 1 | Grid and pixel helpers | ⬜ | ⬜ | |
+| 1 | Grid and pixel helpers | ✅ | ✅ | 2026-09-25 |
 | 2 | One static room | ⬜ | ⬜ | |
 | 3 | Two rooms + display lists | ⬜ | ⬜ | |
 | 4 | Hand-written algorithms | ⬜ | ⬜ | |
@@ -31,11 +31,12 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - [ ] **Understood:** glutInit, display mode, main loop
 
 ### Phase 1: Grid and pixel helpers
-- [ ] config.py has all constants and colors
-- [ ] pixel.py functions done
-- [ ] Red box top-left, blue box bottom-right
-- [ ] Sprite draws the right way up
+- [x] config.py has all constants and colors (§5 object positions deferred to Phase 2)
+- [x] pixel.py functions done (7 functions; hex_to_rgb moved out of main.py)
+- [x] Red box top-left, blue box bottom-right (verified by pixel check + screenshot)
+- [x] Sprite draws the right way up (verified: round top, eyes row 4, shadow on right, not mirrored)
 - [ ] **Understood:** why the y axis is flipped
+- Gate passed 2026-09-25. Bullet "•" fixed inside draw_text (draws a small square + advances one char width).
 
 ### Phase 2: One static room
 - [ ] Wall, baseboard, floor planks
@@ -137,7 +138,8 @@ Candidates to watch for:
 
 | Date | What I discovered | How I'd explain it in one sentence |
 |---|---|---|
-| | | |
+| 2026-09-25 | GLUT bitmap fonts only support char codes 1–255; "•" (U+2022) renders nothing and advances 0 px | Old bitmap fonts carry a 256-glyph table, so any Unicode character above 255 is silently skipped. |
+| 2026-09-25 | `glutCreateWindow` needs a `bytes` title, not a `str` (else `ctypes.ArgumentError`) | PyOpenGL passes the title straight to a C `char*`, which only accepts bytes, so the string must be `.encode()`d first. |
 
 ## Future ideas → reflection Q4 "One more week?"
 

@@ -303,3 +303,19 @@ Claude Code should write these for every function. You should read each one and 
 | A PATCH fails | Keep the local state, retry on the next toggle, show "offline" |
 | Unknown `--me` value | Print usage and exit |
 | Poll returns bad data | Ignore it, keep the last good state |
+
+## 10. Dev tools
+
+Not part of the app; used to verify each phase.
+
+### `tools/snapshot.py`
+
+Renders **one frame of the current `display()`** to a PNG, without opening an interactive window loop (it creates a GLUT context, draws one frame, reads the framebuffer, and exits).
+
+```
+python tools/snapshot.py out.png
+```
+
+- Depends on **Pillow**, listed in `requirements-dev.txt` (kept out of `requirements.txt` so the app itself needs no extra packages). Install with `pip install -r requirements-dev.txt`.
+- Because it calls the real `main.display()`, whatever the app draws this phase is what the snapshot shows.
+- Reads the front buffer after the frame is drawn and flips vertically (OpenGL's origin is bottom-left, image files are top-left).
