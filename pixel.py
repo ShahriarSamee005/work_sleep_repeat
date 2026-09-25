@@ -19,6 +19,8 @@ import config
 
 BULLET = "•"                                # '•' — GLUT bitmap font এই কোড (8226) আঁকতে পারে না
 _BULLET_BITS = bytes((0xF0, 0xF0, 0xF0, 0xF0))   # 4×4 ভরাট বর্গ (প্রতি বাইটের উপরের ৪টি বিট সেট)
+DASH = "—"                                   # '—' em-dash (U+2014, 8212) — একইভাবে bitmap font আঁকে না
+_DASH_BITS = bytes((0xFC, 0xFC))             # 6×2 অনুভূমিক বার (প্রতি বাইটের উপরের ৬টি বিট সেট)
 
 
 @lru_cache(maxsize=None)
@@ -95,5 +97,9 @@ def draw_text(x, y, text, color, font):
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1)   # 4-চওড়া bitmap ঠিকভাবে পড়তে alignment=1
             # 4×4 বর্গ আঁকে (লেখার উল্লম্ব মাঝ বরাবর) এবং pen-কে normal char-এর সমান সরায়
             glBitmap(4, 4, -2.0, -2.0, float(advance), 0.0, _BULLET_BITS)
+        elif ch == DASH:
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)   # 6-চওড়া bitmap-এর জন্য alignment=1
+            # 6×2 অনুভূমিক বার আঁকে (baseline থেকে ~4px উপরে, লেখার মাঝ বরাবর) ও pen সরায়
+            glBitmap(6, 2, 0.0, -4.0, float(advance), 0.0, _DASH_BITS)
         else:
             glutBitmapCharacter(font, ord(ch))      # এক অক্ষর এঁকে pen ডান দিকে সরায়

@@ -1,6 +1,7 @@
 """character.py — ক্যারেক্টারের state machine ও drawing (ঘুম → ওঠা → হাঁটা → বসা → কাজ ও উল্টো)।"""
 
 import math
+import time
 
 from OpenGL.GL import glPopMatrix, glPushMatrix, glScalef, glTranslatef
 
@@ -70,12 +71,45 @@ class Character:
         self._work_time = 0.0      # WORKING-এ ঢোকার পর কত সময় (device চালু ক্রমে)
         self._leave_time = 0.0     # WORKING ছাড়ার সময় গোনা (device বন্ধ ক্রমে)
         self.moving_up = True      # facing: উপরে হাঁটছে? (dy < 0 → পিঠ দেখা যায়)
+        # ---- সময় হিসাব (appflow §6; লোকাল, নেটওয়ার্ক পরে) ----
+        self.today_seconds = 0.0   # আজ শেষ হওয়া সেশনগুলোর মোট সময় (virtual সেকেন্ড)
+        self.since = None          # চলতি সেশন কখন শুরু (virtual timestamp) বা None
+        self.day = None            # today_seconds যে Dhaka দিন-নম্বরের, তা (মধ্যরাত রিসেটে লাগে)
 
-    def set_working(self, working):
-        # কী করছে: শুধু লক্ষ্য (target) সেট করে — কাজ করবে কি না; update() বাকিটা সামলায়
-        # কেন লাগছে: sync/কী শুধু "কী হওয়া উচিত" বলে; কীভাবে (অ্যানিমেশন) সেটা state machine ঠিক করে
-        # real world-এ এটা কোথায় দেখা যায়: UI-তে target state সেট করলে animation নিজে গিয়ে মেলায়
+    def set_working(self, working, now=None):
+        # কী করছে: লক্ষ্য (target) সেট করে; সেই সাথে সময় হিসাব রাখে — চালু হলে since=now, বন্ধ হলে
+        #           today_seconds-এ চলতি সেশনের সময় যোগ করে (শুধু target বদলালে, বারবার একই কল-এ নয়)
+        # কেন লাগছে: sync/কী "কী হওয়া উচিত" বলে; toggle-এর মুহূর্তেই সময় গোনা শুরু/শেষ হয় (appflow §6)
+        # real world-এ এটা কোথায় দেখা যায়: টাইম-ট্র্যাকার অ্যাপে start/stop চাপলে সময় জমা
+        if now is None:
+            now = time.time()             # কলার সাধারণত virtual now দেয়; না দিলে বাস্তব সময়
+        if working == self.target_working:
+            return                        # কোনো বদল নেই (Phase 9-এ প্রতি ফ্রেমে কল হবে) → কিছু না
+        if working:
+            self.since = now              # সেশন শুরু
+        else:
+            if self.since is not None:
+                self.today_seconds += now - self.since   # চলতি সেশনের সময় জমা
+                self.since = None
         self.target_working = working
+
+    def time_today(self, now):
+        # কী করছে: আজকের মোট কাজের সময় (সেকেন্ড) দেয় = জমা today_seconds + চলতি সেশন (now - since);
+        #           Dhaka দিন বদলে গেলে today_seconds ০ ধরে (মধ্যরাত রিসেট)
+        # কেন লাগছে: প্যানেলের টাইম কার্ড প্রতি ফ্রেমে লাইভ সময় দেখায়; নতুন দিনে গণনা নতুন করে শুরু
+        # real world-এ এটা কোথায় দেখা যায়: টাইম-ট্র্যাকারে "today" কাউন্টার যা মধ্যরাতে রিসেট হয়
+        day = int((now + config.TZ_OFFSET_SECONDS) // 86400)   # Dhaka দিন-নম্বর (epoch থেকে)
+        if self.day is None:
+            self.day = day                # প্রথমবার: রিসেট নয়, শুধু দিন মনে রাখি
+        elif day != self.day:
+            self.day = day                # নতুন দিন → আজকের গণনা ০ থেকে
+            self.today_seconds = 0.0
+            if self.since is not None:
+                self.since = now          # চলমান সেশন হলে নতুন দিনে নতুন করে গোনা শুরু
+        total = self.today_seconds
+        if self.since is not None:
+            total += now - self.since     # চলতি সেশনের এখন পর্যন্ত সময়
+        return total
 
     def bed_is_messy(self):
         # কী করছে: বিছানা এলোমেলো কিনা বলে — IN_BED ছাড়া সব অবস্থাতেই এলোমেলো

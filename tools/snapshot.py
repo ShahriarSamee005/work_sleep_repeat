@@ -43,6 +43,7 @@ import main as app
 
 W, H = config.WINDOW_W, config.WINDOW_H
 _DT = 1.0 / 60.0
+FAKE_NOW = 1_700_000_000.0   # স্থির virtual epoch — snapshot-এ টাইম কার্ড deterministic রাখতে
 
 
 def _setup_context():
@@ -85,12 +86,24 @@ def _settle(samee_work, rifat_work, seconds=4.0):
         app.rifat.update(_DT)
 
 
-def render_single(out, samee, rifat, t):
-    # কী করছে: দুই রুম নির্দিষ্ট অবস্থায় থিতু করে t সময়ে একটি ফ্রেম PNG-তে সেভ করে
-    # কেন লাগছে: idle/work অবস্থা ও নির্দিষ্ট টাইপিং frame যাচাই করতে
+def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_worked=0.0):
+    # কী করছে: দুই রুম নির্দিষ্ট অবস্থায় থিতু করে, প্যানেলের --me সেট করে, কাজ-করা চরিত্রের কার্ড
+    #           সময় deterministic করে (since পিছিয়ে), t সময়ে একটি ফ্রেম PNG-তে সেভ করে
+    # কেন লাগছে: idle/work, প্যানেল, ও নির্দিষ্ট কার্ড-সময় (যেমন "1h 05m") যাচাই করতে
     # real world-এ এটা কোথায় দেখা যায়: নির্দিষ্ট state-এর reference screenshot
+    app._me = me
+    app._fake_wall = FAKE_NOW                       # সময় ফ্রিজ — context warm-up-এর display()-ও
+                                                    # যেন FAKE_NOW-এই দিন সেট করে (নাহলে দিন mismatch-এ
+                                                    # মধ্যরাত রিসেট since মুছে দেয়)
     _setup_context()
     _settle(samee == "work", rifat == "work")
+    # কাজ-করা চরিত্রের since পিছিয়ে সেট করে কার্ডে নির্দিষ্ট সময় দেখাই (worked সেকেন্ড)
+    if samee == "work":
+        app.samee.today_seconds = 0.0
+        app.samee.since = FAKE_NOW - samee_worked
+    if rifat == "work":
+        app.rifat.today_seconds = 0.0
+        app.rifat.since = FAKE_NOW - rifat_worked
     app._fake_time = t
     _grab().save(out)
     print("wrote", os.path.abspath(out))
@@ -166,6 +179,12 @@ def main():
                         help="contact-sheet starting state before the t=0 toggle")
     parser.add_argument("--debug", action="store_true",
                         help="turn on the debug overlay (grid, Bezier, clip rects, red/green rays)")
+    parser.add_argument("--me", choices=("samee", "rifat"), default="samee",
+                        help="which user's panel toggle to show")
+    parser.add_argument("--samee-worked", type=float, default=0.0,
+                        help="seconds to show on Samee's card when Samee is working")
+    parser.add_argument("--rifat-worked", type=float, default=0.0,
+                        help="seconds to show on Rifat's card when Rifat is working")
     args = parser.parse_args()
 
     app._debug = args.debug   # ডিবাগ overlay চালু/বন্ধ (main-এর module global সেট করছি)
@@ -174,7 +193,8 @@ def main():
         frames = [float(x) for x in args.frames.split(",")] if args.frames else [0.0]
         render_sheet(args.sheet, args.toggle, frames, start_work=(args.start == "work"))
     else:
-        render_single(args.out or "out.png", args.samee, args.rifat, args.t)
+        render_single(args.out or "out.png", args.samee, args.rifat, args.t,
+                      me=args.me, samee_worked=args.samee_worked, rifat_worked=args.rifat_worked)
 
     if app.glutLeaveMainLoop is not None:
         app.glutLeaveMainLoop()

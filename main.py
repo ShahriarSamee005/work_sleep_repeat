@@ -34,18 +34,22 @@ from OpenGL.GLUT import (
     glutInitWindowSize,
     glutKeyboardFunc,
     glutMainLoop,
+    glutMouseFunc,
     glutPostRedisplay,
     glutSwapBuffers,
     glutTimerFunc,
     GLUT_BITMAP_8_BY_13,
     GLUT_BITMAP_9_BY_15,
     GLUT_DOUBLE,
+    GLUT_DOWN,
+    GLUT_LEFT_BUTTON,
     GLUT_RGBA,
 )
 
 import character
 import config
 import lighting
+import panel
 import room
 from pixel import draw_rect, draw_text, hex_to_rgb
 
@@ -71,6 +75,24 @@ rifat = character.Character("rifat")
 _start_time = time.perf_counter()
 _last_tick = _start_time
 _fake_time = None
+
+# --me: কোন ব্যবহারকারী এই অ্যাপ চালাচ্ছে (প্যানেল টগল এই জনকে নিয়ন্ত্রণ করে); main() সেট করে
+_me = "samee"
+
+# ওয়াল-ক্লক (সময় হিসাব ও দিন): virtual now = শুরু + অতিবাহিত বাস্তব সময় × TIME_SCALE।
+# TIME_SCALE বাড়ালে কার্ড দ্রুত বাড়ে ও মধ্যরাত রিসেট দ্রুত টেস্ট করা যায়। snapshot _fake_wall সেট করতে পারে।
+_wall_start = time.time()
+_fake_wall = None
+
+
+def wall_now():
+    # কী করছে: সময় হিসাবের virtual "now" (epoch সেকেন্ড) দেয় — _fake_wall থাকলে সেটি,
+    #           নাহলে শুরু থেকে অতিবাহিত বাস্তব সময়কে TIME_SCALE দিয়ে গুণ করে এগিয়ে নেওয়া মান
+    # কেন লাগছে: টাইম কার্ড ও মধ্যরাত রিসেট বাস্তব সময়ে চলে; TIME_SCALE দিয়ে দ্রুত টেস্ট, snapshot-এ ফ্রিজ
+    # real world-এ এটা কোথায় দেখা যায়: সিমুলেশন/গেমে "scaled clock" (time warp) ও টেস্টে ফিক্সড ঘড়ি
+    if _fake_wall is not None:
+        return _fake_wall
+    return _wall_start + (time.time() - _wall_start) * config.TIME_SCALE
 
 # FPS কাউন্টার state (Phase 10-এ পুরো কাউন্টার সরিয়ে ফেলব)
 _fps_count = 0
@@ -132,11 +154,12 @@ def init_scene():
     room.build_room_lists()
 
 
-def _draw_room(char, translate_x, mirror):
+def _draw_room(char, translate_x, mirror, warn=False):
     # কী করছে: এক রুম আঁকছে design §8-এর স্তর ক্রমে — স্ট্যাটিক রুম → নিভানো স্ক্রিন/ল্যাম্প (ম্লান হবে) →
     #           চরিত্র → অন্ধকার overlay → glow → রশ্মি → স্ক্রিন আভা → জ্বলন্ত স্ক্রিন/ল্যাম্প (উজ্জ্বল, উপরে)
     #           → ডিবাগ overlay। সব এক push/pop matrix-এর ভেতরে (translate, Rifat হলে reflect)।
     # কেন লাগছে: আলো স্তর হিসেবে উপরে বসে; নিভানো device overlay-তে ম্লান হয়, জ্বলন্ত device পরে এঁকে উজ্জ্বল থাকে
+    #           warn=True হলে (দুজনেই কাজ, ব্লিঙ্ক ফ্রেম) ল্যাম্প শেড লাল হয় (দ্বন্দ্ব সতর্কতা, appflow §7)
     # real world-এ এটা কোথায় দেখা যায়: রেন্ডারারে scene → lighting pass → emissive pass ক্রমে আঁকা
     lit = char.monitor_on or char.lamp_on                 # রুমে কোনো device চালু = "কাজ হচ্ছে"
     glPushMatrix()
@@ -165,7 +188,7 @@ def _draw_room(char, translate_x, mirror):
     if char.monitor_on:
         room.draw_screen(on=True)
     if char.lamp_on:
-        room.draw_lamp_shade(on=True, warn=False)
+        room.draw_lamp_shade(on=True, warn=warn)          # দ্বন্দ্ব ব্লিঙ্ক ফ্রেমে warn=True → লাল
 
     # ডিবাগ overlay (দুই রুমেই, matrix-এর ভেতরে যাতে transform মেলে; text লেবেল বাইরে আঁকা হয়)
     if _debug:
@@ -237,12 +260,26 @@ def display():
     # real world-এ এটা কোথায় দেখা যায়: গেমের render loop — clear → scene → UI → swap
     glClear(GL_COLOR_BUFFER_BIT)
 
-    _draw_room(samee, config.SAMEE_ORIGIN[0], False)                     # translate(2, 2)
-    _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True)      # translate(97+93, 2) + reflect
+    now = wall_now()
+    # দ্বন্দ্ব: দুজনেই কাজ করছে (target) → ল্যাম্প শেড প্রতি 0.5s লাল-হলুদ ব্লিঙ্ক (appflow §7)
+    conflict = samee.target_working and rifat.target_working
+    blink_on = int(anim_time() / config.CONFLICT_BLINK_SECONDS) % 2 == 0
+    warn = conflict and blink_on
+
+    _draw_room(samee, config.SAMEE_ORIGIN[0], False, warn)               # translate(2, 2)
+    _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True, warn)  # translate(97+93, 2) + reflect
 
     _draw_divider()
     _draw_frame()
     _draw_labels()   # mirror matrix-এর বাইরে, তাই লেখা সোজা
+
+    # প্যানেল (design §9) — প্রতিজনের working ও আজকের সময় দিয়ে state বানিয়ে আঁকি
+    state = {
+        "samee": {"working": samee.target_working, "seconds": samee.time_today(now)},
+        "rifat": {"working": rifat.target_working, "seconds": rifat.time_today(now)},
+    }
+    panel.draw_panel(state, _me, now)
+
     if _debug:
         _draw_debug_labels()   # ডিবাগ text-ও mirror matrix-এর বাইরে
 
@@ -290,9 +327,9 @@ def keyboard(key, x, y):
         else:
             sys.exit(0)
     elif key == b"1":
-        samee.set_working(not samee.target_working)
+        samee.set_working(not samee.target_working, wall_now())
     elif key == b"2":
-        rifat.set_working(not rifat.target_working)
+        rifat.set_working(not rifat.target_working, wall_now())
     elif key in (b"d", b"D"):
         _debug = not _debug       # পুরো ডিবাগ overlay (গ্রিডও দেখায়)
     elif key in (b"g", b"G"):
@@ -300,11 +337,27 @@ def keyboard(key, x, y):
     glutPostRedisplay()           # ডিবাগ টগলের ফল সাথে সাথে দেখাতে রিড্র চাই
 
 
+def mouse(button, mstate, mx, my):
+    # কী করছে: বাঁ-বোতাম চাপলে মাউস অবস্থানকে গ্রিডে বদলে টগল বাক্সে পড়েছে কিনা দেখে; পড়লে
+    #           --me ব্যবহারকারীর status টগল করে (কী 1/2-এর মতোই set_working)
+    # কেন লাগছে: প্যানেলের টগলে ক্লিক করে নিজের কাজের অবস্থা বদলানোর ইনপুট (design §9 / appflow §5)
+    # real world-এ এটা কোথায় দেখা যায়: UI-তে বাটন ক্লিক → hit-test → action
+    if button != GLUT_LEFT_BUTTON or mstate != GLUT_DOWN:
+        return                                            # শুধু বাঁ-বোতাম চাপা (release/ড্র্যাগ নয়)
+    gx, gy = panel.screen_to_grid(mx, my)
+    if panel.toggle_hit(gx, gy):
+        me = samee if _me == "samee" else rifat
+        me.set_working(not me.target_working, wall_now())
+        glutPostRedisplay()                               # সাথে সাথে টগলের রূপ বদল দেখাতে
+
+
 def main():
     # কী করছে: আর্গুমেন্ট পড়ে GLUT চালু করে উইন্ডো খোলে, init_scene() ডাকে, কলব্যাক বাঁধে ও মেইন লুপে ঢোকে
     # কেন লাগছে: এটাই অ্যাপের শুরু — উইন্ডো, প্রজেকশন, display list ও ইনপুট হ্যান্ডলার সেট করে সব চালু করে
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
     args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
+    global _me
+    _me = args.me        # প্যানেল টগল ও মাউস ক্লিক এই ব্যবহারকারীকে নিয়ন্ত্রণ করবে
 
     glutInit([sys.argv[0]])                          # GLUT চালু; নিজের ফ্ল্যাগ GLUT-কে দিচ্ছি না
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA)     # ডাবল বাফার + RGBA কালার মোড
@@ -316,6 +369,7 @@ def main():
 
     glutDisplayFunc(display)                          # প্রতি ফ্রেমে display() ডাকবে
     glutKeyboardFunc(keyboard)                        # কী চাপলে keyboard() ডাকবে
+    glutMouseFunc(mouse)                              # মাউস বোতাম চাপলে mouse() ডাকবে (টগল ক্লিক)
     glutTimerFunc(16, timer, 0)                       # ~60 FPS টাইমার (Phase 6-এ dt সহ পূর্ণ হবে)
 
     glutMainLoop()                                    # ইভেন্ট লুপ শুরু; ESC না চাপা পর্যন্ত চলবে

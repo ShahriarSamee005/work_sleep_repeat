@@ -14,7 +14,7 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 | 5 | Working state (no animation) | ✅ | ✅ | 2026-09-25 |
 | 6 | Animation | ✅ | ✅ | 2026-09-25 |
 | 7 | Lighting + debug view | 🟨 | ⬜ | 2026-09-25 |
-| 8 | Panel | ⬜ | ⬜ | |
+| 8 | Panel | 🟨 | ⬜ | 2026-09-25 |
 | 9 | Real-time sync | ⬜ | ⬜ | |
 | 10 | Finish and prepare | ⬜ | ⬜ | |
 
@@ -101,11 +101,15 @@ Status key: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked
 - Gate awaiting user confirm (live keys 1/2). Verified via snapshots: both-idle evenly dark; Samee-work warm glow, his side brighter, divider clean; both-work both warm; --debug shows curve/points/clip/red-vs-green with green stopping at the room edge. Bench: both-working 13.6 ms/frame (~74 FPS raw, capped 60 by the 16 ms timer); debug overlay ~40 FPS (diagnostic view only).
 
 ### Phase 8: Panel
-- [ ] Moon/sun icon
-- [ ] Status lines
-- [ ] Toggle drawn and clickable
-- [ ] Time cards with live counter
-- [ ] Conflict warning
+- [x] Moon/sun icon (MOON when nobody working, SUN when anyone is)
+- [x] Status lines ("Pro AI is free" / "Samee is using it" / "Both working!"; sub "Nobody is working" / "Ask before you start")
+- [x] Toggle drawn and clickable (off=TOGGLE_OFF knob left, on=ACCENT knob right; reflects --me target_working; glutMouseFunc → toggle_hit → set_working, same as key 1/2)
+- [x] Time cards with live counter (PANEL_CARD, or PANEL_CARD_ACTIVE + ACCENT border when working; format_time; counts up while working, holds when off)
+- [x] Conflict warning ("Both working!" in WARNING + both lamp shades blink red every 0.5s)
+- [x] Local time tracking (Character.today_seconds/since/day; set_working(now) starts/stops; time_today(now) live + midnight reset)
+- [x] TIME_SCALE (default 1.0) via main.wall_now() virtual clock; midnight reset in Asia/Dhaka (UTC+6, day-number compare)
+- [x] snapshot.py: --me, --samee-worked/--rifat-worked for deterministic card times; --debug already present
+- Gate awaiting user confirm (live toggle click). Verified via snapshots: idle (moon, "Pro AI is free", toggle off/left, cards "—"); Samee-work (sun, "Samee is using it", toggle on/right, active card "1h 05m" + ACCENT border); both-work ("Both working!" red, both lamps red on blink t=0, yellow at t=0.5). Headless: toggle_hit True at center, click flips target like key 1, counter counts up / holds / resumes, midnight resets. App runs ~61 FPS with panel.
 
 ### Phase 9: Sync
 - [ ] Supabase table + rows + policy
@@ -155,6 +159,8 @@ Candidates to watch for:
 | 2026-09-25 | Alpha stacking makes the lamp glow: 5 translucent circles at α 0.08 pile up so the shared centre is brightest, giving the stepped pixel-art falloff for free | `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blends each circle over the last, so overlapping cells add up — no gradient maths needed, the overlap *is* the gradient. |
 | 2026-09-25 | Emissive parts must be drawn *after* the darkness overlay, or they get dimmed with the room | The off screen/lamp are drawn before the overlay (so they dim like furniture); the on screen/lamp are redrawn after it (so light sources stay bright). Same object, two layers. |
 | 2026-09-25 | Batching all ray/glow cells into one `glBegin(GL_QUADS)` per colour kept 60 FPS with lighting on | The rays are still rasterised by hand-written `bresenham_line`, but every cell is emitted inside a single begin/end instead of one per cell — one draw call, not hundreds. |
+| 2026-09-25 | The em-dash "—" (U+2014) is invisible in GLUT bitmap fonts, exactly like "•" | Same 256-glyph limit; I hand-draw "—" as a 6×2 bar in `draw_text` (and count it as one char-width when centring), so the empty time card reads "—" instead of blank. |
+| 2026-09-25 | A frozen snapshot clock reset the time cards to "—" until I set the fake clock before the GL warm-up | `_setup_context()` draws 3 frames first; those set each character's stored "day" from the real 2026 date, so switching to the 2023 fake epoch looked like a midnight rollover and wiped `since`. Freezing the clock first keeps the day consistent. |
 
 ## Future ideas → reflection Q4 "One more week?"
 
