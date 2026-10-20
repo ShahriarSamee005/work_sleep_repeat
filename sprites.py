@@ -139,3 +139,62 @@ SUN_COLORS = {
     "O": config.SUN_CORE,
     "#": config.SUN_EDGE,
 }
+
+# ---- ট্রে আইকন (design §4) — ১৬×১৬ গ্রিড; tray.py রান-টাইমে ছবি বানায় (কোনো ফাইল শিপ করি না) ----
+
+# TRAY_MOON (16×16) — কেউ কাজ করছে না; 'Y' = MOON_LIGHT, '#' = MOON_EDGE
+TRAY_MOON = [
+    "................",
+    "....######......",
+    "..##YYYYY##.....",
+    ".#YYYYYYYY##....",
+    ".#YYYYY#####....",
+    "#YYYYY#.........",
+    "#YYYY#..........",
+    "#YYYY#..........",
+    "#YYYY#..........",
+    "#YYYY#..........",
+    "#YYYYY#.........",
+    ".#YYYYY#####....",
+    ".#YYYYYYYY##....",
+    "..##YYYYY##.....",
+    "....######......",
+    "................",
+]
+TRAY_MOON_COLORS = {
+    "Y": config.MOON_LIGHT,
+    "#": config.MOON_EDGE,
+}
+
+# TRAY_MOON_OFF — একই চাঁদ, ধূসর (সার্ভারে পৌঁছানো যাচ্ছে না)
+TRAY_MOON_OFF_COLORS = {
+    "Y": config.OFFLINE_GREY,
+    "#": config.PANEL_BORDER,
+}
+
+# TRAY_LAMP (16×16) — কেউ কাজ করছে; 'L' = LAMP_ON শেড, 'B' = বাল্বের রেখা,
+# 'G' = নিচে ছড়ানো আলো, '#' = OUTLINE
+TRAY_LAMP = [
+    "................",
+    "......####......",
+    ".....#LLLL#.....",
+    "....#LLLLLL#....",
+    "...#LLLLLLLL#...",
+    "...#BBBBBBBB#...",
+    "....GG#..#GG....",
+    "...GG..#..GG....",
+    "......#.........",
+    "......#.........",
+    "......#.........",
+    "......#.........",
+    "....####........",
+    "...#....#.......",
+    "...######.......",
+    "................",
+]
+TRAY_LAMP_COLORS = {
+    "L": config.LAMP_ON,
+    "B": config.LAMP_BULB,
+    "G": config.GLOW_WARM,
+    "#": config.OUTLINE,
+}

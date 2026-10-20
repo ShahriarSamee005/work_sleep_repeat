@@ -72,7 +72,13 @@ PUSH_WHILE_WORKING = 60         # কাজ চলার সময় প্র�
 BACKOFF_SECONDS = (2, 4, 8, 16, 30)   # পরপর ব্যর্থতায় অপেক্ষার ক্রম (শেষ মানটিই সর্বোচ্চ)
 FAILURES_BEFORE_OFFLINE = 2     # এতবার পরপর ব্যর্থ হলে প্যানেলে "offline" দেখাই (appflow §10)
 TIME_JUMP_SECONDS = 30          # লুপের দুই চক্রে এত ফাঁক = পিসি ঘুমিয়েছিল → তৎক্ষণাৎ reconnect
-APP_VERSION = "2.0-phase11"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
+APP_VERSION = "2.0-phase13"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
+
+# ট্রে ও অ্যালার্ট (techspec §9 / design §4–5; Phase 13)
+CONFLICT_AFTER = 30             # দুজনে একসাথে এত সেকেন্ড কাজ করলে তবেই দ্বন্দ্বের টোস্ট (appflow §9)
+TRAY_ICON_PX = 32               # ট্রে আইকনের মাপ (১৬×১৬ গ্রিড ২× করে আঁকা হয়)
+PUMP_SECONDS = 0.1              # ট্রে কমান্ড ও হুক ইভেন্ট কত ঘন ঘন নেওয়া হয় (উইন্ডো লুকানো থাকলেও)
+ALERTS_DEFAULT = {"free": True, "conflict": True}   # কোন টোস্ট চালু (config.json-এ সেভ হয়)
 TIMEZONE = "Asia/Dhaka"        # দিন হিসাবের টাইমজোন
 TZ_OFFSET_SECONDS = 6 * 3600   # Asia/Dhaka = UTC+6 (DST নেই); দিন-নম্বর বের করতে UTC-তে যোগ করি
 TIME_SCALE = 1.0               # সময় দ্রুত করার গুণক (কার্ড/মধ্যরাত রিসেট টেস্টে বাড়াই; ডিফল্ট বাস্তব গতি)

@@ -2,7 +2,7 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 11 — Supabase sync (✅ complete) → next: Phase 13 — Tray + alerts
+**Current phase:** 13 — Tray + alerts (✅ built, awaiting manual gate) → next: Phase 14 — Dibs
 **Last updated:** 2026-10-21
 
 ---
@@ -16,13 +16,33 @@
 | 10 | Local detection + pyglet window | ✅ Done | ✅ (manual gate run by Samee) | `04914fc`, `cd5d8b4` |
 | 11 | Supabase sync | ✅ Done | ✅ (gate run by Samee on the real project) | — |
 | 12 | ~~Usage limits + split~~ **Dropped** | ⬛ Cut | — | — |
-| 13 | Tray + alerts | ⬜ Not started | — | — |
+| 13 | Tray + alerts | 🟨 Built, manual gate pending | — | — |
 | 14 | Dibs | ⬜ Not started | — | — |
 | 15 | Setup + autostart | ⬜ Not started | — | — |
 | 16 | Package + cleanup | ⬜ Not started | — | — |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 13 results (2026-10-21)
+
+Built: `tray.py` (pystray on its own thread, runtime-generated icons, menu), `alerts.py`
+(It's free + conflict only), hide-to-tray close, `--tray`, alert on/off saved to `config.json`.
+`pytest` green (96 tests). The parts needing a human — the actual tray icon, menu clicks and
+Windows toasts — are in the checklist, not ticked here.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 96 passed (alerts 12, tray 12, sync 22, clock/state/panel 20, activity 13, settings 16, character 6) |
+| X / ESC hide, app keeps running | ✅ `request_close()` → `hide_window()`; window hidden, loop alive, detection still fired a hook while hidden |
+| Tray SHOW / QUIT through the queue | ✅ `SHOW` re-showed the window and restarted the animation tick; `QUIT` returned from the loop |
+| CPU while hidden | ✅ **1.0%** of one core (was 23% until the redraw fix below) |
+| Single instance with the tray up | ✅ `/health` ok, `POST /show` 204, second copy exited 0 with "already running" |
+| Alert rules + dedupe | ✅ Unit-tested: free fires once per transition, conflict once per overlap and only after 30 s |
+| Alerts stay off after restart | ✅ Toggle writes `alerts` into `config.json` atomically and `load()` reads it back; other keys untouched |
+| Needs a human | ⏭️ Tray icon art at 16 px in the real tray, menu clicks, real Windows toasts, `--tray` start |
 
 ---
 
@@ -130,6 +150,10 @@ real project on 2026-10-21; the gate passed.
 | 2026-10-20 | `listener` sets `allow_reuse_address = False` | On Windows SO_REUSEADDR lets a second process bind the same port, which would break "port bind = single-instance lock" | techspec §8 |
 | 2026-10-20 | Hook events reach `activity` through a `queue` | `activity` stays pure (no threads/locks); the listener thread only enqueues, the main loop drains each frame | techspec §3 |
 | 2026-10-20 | `panel.draw_panel` keeps its dict argument | `main` builds the dict from `state.snapshot()` each frame, so the lock rule in §7 holds without a panel rewrite; the panel takes the snapshot itself when it grows dibs/online dots (Phase 14) | — |
+| 2026-10-21 | `pyglet.app.run(interval=None)`; we draw from the tick ourselves | pyglet's own 60 Hz redraw runs even when the window is hidden — measured **23%** of a core in the tray. Drawing only from the animation tick (which is unscheduled while hidden) drops it to **1%** | — |
+| 2026-10-21 | "It's free" is suppressed while I am working | techspec §9 says only "peer true → false", but if I am already using Claude the news is noise, and the conflict toast covers that case | techspec §9 (noted) |
+| 2026-10-21 | "Call dibs" and "Start with Windows" are disabled menu placeholders | Dibs is Phase 14 and `autostart.py` is Phase 15; showing them greyed keeps the menu shape honest | techspec §9 |
+| 2026-10-21 | Pillow moved from `requirements-dev.txt` to `requirements.txt` | pystray needs it at runtime to build the tray icon, so it is no longer dev-only | — |
 | 2026-10-20 | `schema.sql` drops the usage tables and `wsr_report_usage`/`wsr_credit` | Usage was cut; only `wsr_status`, `wsr_update_status` and `wsr_get_state` are created, so the anon surface stays as small as possible | techspec §6 (noted inline) |
 | 2026-10-20 | Panel says "You are working", not "You're working" | This bitmap font draws the apostrophe as a slanted tick ("You´re"); the wording change is cheaper than hand-editing a glyph | design §2.1 |
 | 2026-10-20 | Time cards moved up 4 rows (y 62 / 77) | The bottom connection line (design §2) had no room; it now sits at y 94 clear of the cards and the panel border | design §2 |
@@ -158,6 +182,7 @@ real project on 2026-10-21; the gate passed.
 | `config.TOGGLE_*` constants unused | Phase 10 | Toggle removed; Phase 14's dibs button reuses that space and those boxes |
 | Shared anon key is in `.env` in plain text | Phase 11 | Same risk the security row below covers; fine for two friends, redo before anyone else |
 | No `wsr.log` file yet (techspec §12) | Phase 11 | Sync/listener print to the console. Add the rotating log in Phase 13 with the tray |
+| Visible window costs ~60% of one core | Phase 13 | That is the phase 0–8 immediate-mode renderer at 60 FPS, unchanged since the lab. Hidden is now 1%. If battery matters in the trial, drop to 30 FPS or cache the static layers in Phase 16 |
 | Peer's `today_seconds` only moves on a poll | Phase 11 | It steps every 2 s instead of counting up smoothly. Leave unless it looks jumpy in the trial |
 | `hex_to_rgb` memoized | Lab | Revisit only if palette grows |
 | Debug view redraws unclipped rays (~40 fps in debug) | Lab | Leave; dev tool only |

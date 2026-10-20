@@ -9,6 +9,20 @@ CONFIG_NAME = "config.json"
 ENV_NAME = ".env"
 
 
+def save_alerts(values, path=None):
+    # কী করছে: config.json-এ শুধু "alerts" অংশটি লেখে — বাকি চাবি (me, credentials…) অবিকৃত রেখে
+    # কেন লাগছে: ট্রে থেকে অ্যালার্ট বন্ধ করলে রিস্টার্টের পরেও বন্ধ থাকতে হবে (Phase 13 gate)
+    # real world-এ এটা কোথায় দেখা যায়: সেটিংস ফাইলের একটি অংশ আপডেট করা (পুরোটা ওভাররাইট নয়)
+    path = Path(path) if path is not None else config_path()
+    data = _read_json(path)
+    data["alerts"] = dict(values)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")      # temp + replace = অর্ধেক লেখা ফাইল কখনো থাকবে না
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    return path
+
+
 @dataclass(frozen=True)
 class UserConfig:
     # কী করছে: অ্যাপ চালানোর জন্য দরকারি সেটিং — কে চালাচ্ছে ও Supabase-এর ঠিকানা/কী
@@ -18,6 +32,7 @@ class UserConfig:
     supabase_url: str = ""
     supabase_key: str = ""
     source: str = "none"          # মান কোথা থেকে এলো (লগ/ডায়ালগে দেখাতে)
+    alerts: tuple = ()            # (kind, enabled) জোড়া — frozen থাকতে হয় বলে tuple
 
     @property
     def has_supabase(self):
@@ -97,4 +112,8 @@ def load(me=None, path=None, env=None):
 
     if not (url and key):
         source = "none"                        # কোথাওই পাওয়া যায়নি → অ্যাপ লোকাল মোডে চলবে
-    return UserConfig(me=(me or who), supabase_url=url, supabase_key=key, source=source)
+    saved_alerts = data.get("alerts")
+    alerts = tuple(sorted((k, bool(v)) for k, v in saved_alerts.items())) \
+        if isinstance(saved_alerts, dict) else ()
+    return UserConfig(me=(me or who), supabase_url=url, supabase_key=key,
+                      source=source, alerts=alerts)

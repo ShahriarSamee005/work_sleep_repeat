@@ -1,7 +1,6 @@
 import argparse
 import queue
 import sys
-import threading
 import time
 
 from OpenGL.GL import (
@@ -31,6 +30,7 @@ from pyglet.event import EVENT_HANDLED
 from pyglet.window import key as pyglet_key
 
 import activity
+import alerts
 import character
 import clock
 import config
@@ -41,6 +41,7 @@ import panel
 import room
 import state
 import sync
+import tray
 import userconfig
 from pixel import draw_box, draw_rect, draw_text, hex_to_rgb, text_width
 
@@ -73,8 +74,15 @@ _listener = None     # listener.Listener — 127.0.0.1:47821
 _sync = None         # sync.Sync — Supabase push/poll থ্রেড (--offline হলে None)
 _last_push = 0.0     # সর্বশেষ কখন নিজের status আউটবক্সে দিয়েছি (প্রতি ৬০s পুশের হিসাব)
 _events = queue.Queue()   # listener থ্রেড ভরে, main থ্রেড খালি করে (activity একাই main-এ চলে)
-_show_request = threading.Event()   # দ্বিতীয় কপির POST /show — main থ্রেডে উইন্ডো দেখাতে
 _dev = False         # --dev: কী 1/2 নকল ইভেন্ট ঢালে
+
+# ট্রে ও অ্যালার্ট (Phase 13) — ট্রে নিজের থ্রেডে চলে, তাই সব উইন্ডো-কাজ কমান্ড কিউ হয়ে আসে
+_tray = None
+_commands = tray.make_commands()    # listener ও tray থ্রেড ভরে; main থ্রেড খালি করে
+_alert_settings = None              # কোন টোস্ট চালু (config.json-এ সেভ হয়)
+_alert_memory = alerts.Memory()     # dedupe স্মৃতি
+_prev_snap = None                   # গত সেকেন্ডের snapshot (alerts তুলনা করে)
+_animating = False                  # ৬০ FPS টিক চালু আছে? (উইন্ডো লুকালে বন্ধ রাখি)
 
 # ওয়াল-ক্লক (সময় হিসাব ও দিন): virtual now = শুরু + অতিবাহিত বাস্তব সময় × TIME_SCALE।
 # TIME_SCALE বাড়ালে কার্ড দ্রুত বাড়ে ও মধ্যরাত রিসেট দ্রুত টেস্ট করা যায়। snapshot _fake_wall সেট করতে পারে।
@@ -121,6 +129,11 @@ def parse_args():
         "--offline",
         action="store_true",
         help="run without Supabase sync",
+    )
+    parser.add_argument(
+        "--tray",
+        action="store_true",
+        help="start hidden in the tray (used by autostart)",
     )
     parser.add_argument(
         "--dev",
@@ -299,6 +312,8 @@ def display():
     # কেন লাগছে: এটাই প্রতি ফ্রেমের পুরো দৃশ্য; দুই রুম cached list দিয়ে দ্রুত আঁকা হয়
     # real world-এ এটা কোথায় দেখা যায়: গেমের render loop — clear → scene → UI → (swap)
     # নোট: বাফার সোয়াপ এখানে নেই — pyglet on_draw শেষে নিজেই flip করে (আগে glutSwapBuffers ছিল)
+    if _window is not None and not _window.visible:
+        return                               # ট্রে-তে লুকানো — আঁকার কিছু নেই (Phase 13)
     glClear(GL_COLOR_BUFFER_BIT)
 
     now = wall_now()
@@ -395,40 +410,113 @@ def _apply_activity(now):
 
 
 def tick(dt):
-    # কী করছে: প্রতি ~16ms-এ হুক ইভেন্ট নেয়, snapshot থেকে দুই চরিত্রের লক্ষ্য বসায় ও update করে
-    # কেন লাগছে: অ্যানিমেশন বাস্তব সময়ের সাথে চলতে হয়; dt দিয়ে গতি frame-rate নিরপেক্ষ থাকে।
-    #           ইভেন্ট এলেই সাথে সাথে working হিসাব করি, তাই প্রম্পট দিলে ~সাথে সাথে ডেস্কে যায়
-    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের update(dt) — প্রতি টিকে ইনপুট নিয়ে state এগোনো
-    # নোট: আগে glutTimerFunc নিজেকে আবার schedule করত; pyglet.clock.schedule_interval নিজেই চালায়।
-    #      রিড্র-ও চাইতে হয় না — pyglet প্রতি ফ্রেমে on_draw ডাকে
+    # কী করছে: প্রতি ~16ms-এ snapshot থেকে দুই চরিত্রের লক্ষ্য বসায় ও অ্যানিমেশন এগিয়ে নেয়
+    # কেন লাগছে: অ্যানিমেশন বাস্তব সময়ের সাথে চলতে হয়; dt দিয়ে গতি frame-rate নিরপেক্ষ থাকে
+    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের update(dt)
+    # নোট: উইন্ডো লুকানো থাকলে এই টিক unschedule করা হয় (কেউ দেখছে না, CPU খরচেরও মানে নেই);
+    #      ইভেন্ট নেওয়া ও ট্রে কমান্ড _pump-এ, যা সবসময় চলে
     now = wall_now()
-    if _drain_events():
-        _apply_activity(now)
-    if _show_request.is_set():                 # দ্বিতীয় কপি /show পাঠিয়েছে (listener থ্রেড থেকে)
-        _show_request.clear()
-        _window.set_visible(True)              # উইন্ডো কাজ main থ্রেডেই করতে হয়
-        _window.activate()
-
     views = _views(_state.snapshot(now))
     for name, char in (("samee", samee), ("rifat", rifat)):
         view = views[name]
         char.set_working(view.working, now)      # চরিত্র শুধু লক্ষ্য অনুসরণ করে
         if view.online:
             char.update(dt)                      # অফলাইন সঙ্গীর চরিত্র যেখানে ছিল সেখানেই থাকে (design §3)
+    _redraw()
+
+
+def _redraw():
+    # কী করছে: এক ফ্রেম আঁকে — কনটেক্সট ধরে, on_draw ডাকে, বাফার ফ্লিপ করে
+    # কেন লাগছে: pyglet.app.run(interval=None) দিয়ে চলছি, অর্থাৎ pyglet নিজে থেকে রিড্র করে না।
+    #           তাই আঁকা হয় শুধু অ্যানিমেশন টিক থেকে — আর টিক বন্ধ মানে আঁকাও বন্ধ (লুকানো অবস্থায়
+    #           CPU প্রায় শূন্য; ডিফল্ট ৬০ Hz রিড্র চালু থাকলে লুকিয়েও ~২০% কোর খেত)
+    # real world-এ এটা কোথায় দেখা যায়: নিজের হাতে রেন্ডার লুপ চালানো (manual present/swap)
+    if _window is None or not _window.visible:
+        return
+    _window.switch_to()
+    _window.dispatch_event("on_draw")
+    _window.flip()
+
+
+def _pump(dt):
+    # কী করছে: হুক ইভেন্ট ও ট্রে/দ্বিতীয়-কপির কমান্ড নিয়ে কাজ করে — উইন্ডো দেখানো/লুকানো/বন্ধ করা
+    # কেন লাগছে: ট্রে ও listener আলাদা থ্রেডে চলে; উইন্ডো ছোঁয়া শুধু এই থ্রেডেই বৈধ (techspec §3)।
+    #           অ্যানিমেশন বন্ধ থাকলেও এটি চলে, তাই লুকানো অবস্থাতেও ট্রে মেনু সাড়া দেয়
+    # real world-এ এটা কোথায় দেখা যায়: UI থ্রেডের message pump — বাইরের কমান্ড এখানেই প্রয়োগ হয়
+    if _drain_events():
+        _apply_activity(wall_now())
+    while True:
+        try:
+            command = _commands.get_nowait()
+        except queue.Empty:
+            return
+        if command == tray.SHOW:
+            show_window()
+        elif command == tray.HIDE:
+            hide_window()
+        elif command == tray.QUIT:
+            quit_app()
 
 
 def state_tick(dt):
-    # কী করছে: প্রতি সেকেন্ডে activity.tick() চালায় — idle timeout ও stale cap এখানেই কাজ করে
-    # কেন লাগছে: কোনো ইভেন্ট না এলেও সময় পেরোলে working নিজে থেকে False হতে হবে (appflow §5)
-    # real world-এ এটা কোথায় দেখা যায়: periodic reaper/expiry টাস্ক
-    _apply_activity(wall_now())
+    # কী করছে: প্রতি সেকেন্ডে activity.tick() চালায়, ট্রে আইকন/টুলটিপ মেলায় ও টোস্ট বাজায়
+    # কেন লাগছে: কোনো ইভেন্ট না এলেও সময় পেরোলে working নিজে থেকে False হতে হবে (appflow §5);
+    #           আর অ্যালার্ট তুলনা করে দুই পরপর snapshot-এর মধ্যে (techspec §9)
+    # real world-এ এটা কোথায় দেখা যায়: periodic reaper + state diff → notifications
+    global _prev_snap
+    now = wall_now()
+    _apply_activity(now)
+    snap = _state.snapshot(now)
+    status = panel.status_line(snap)[0]          # টুলটিপ = প্যানেলের স্ট্যাটাস লেখা (design §4)
+    for toast in alerts.check(_prev_snap, snap, _alert_memory):
+        if _alert_settings is not None and not _alert_settings.is_enabled(toast.kind):
+            continue                             # এই অ্যালার্ট ব্যবহারকারী বন্ধ করে রেখেছেন
+        print("WSR: toast:", toast.title, "—", toast.body)
+        if _tray is not None:
+            _tray.notify(toast.title, toast.body)
+    if _tray is not None:
+        _tray.update(snap, status)
+    _prev_snap = snap
+
+
+def show_window():
+    # কী করছে: উইন্ডো দেখায়, সামনে আনে ও অ্যানিমেশন টিক আবার চালু করে
+    # কেন লাগছে: ট্রে মেনু "Open rooms" ও দ্বিতীয় কপির POST /show — দুটোই এখানে আসে (appflow §13)
+    # real world-এ এটা কোথায় দেখা যায়: tray অ্যাপে "restore window"
+    global _animating
+    _window.set_visible(True)
+    _window.activate()
+    if not _animating:
+        pyglet.clock.schedule_interval(tick, TICK_SECONDS)
+        _animating = True
+
+
+def hide_window():
+    # কী করছে: উইন্ডো লুকিয়ে ফেলে ও ৬০ FPS টিক unschedule করে
+    # কেন লাগছে: ট্রে-তে থাকা অবস্থায় কেউ দেখছে না — তখন আঁকা/হিসাব করা মানে শুধু ব্যাটারি খরচ।
+    #           ডিটেকশন, sync ও অ্যালার্ট চলতেই থাকে (সেগুলো ১ Hz ও ১০ Hz টিকে)
+    # real world-এ এটা কোথায় দেখা যায়: লুকানো উইন্ডোতে রেন্ডার লুপ থামানো (throttle when hidden)
+    global _animating
+    _window.set_visible(False)
+    if _animating:
+        pyglet.clock.unschedule(tick)
+        _animating = False
 
 
 def request_close():
-    # কী করছে: অ্যাপ বন্ধ করার একমাত্র পথ — এখন পরিষ্কারভাবে মেইন লুপ থামায়
-    # কেন লাগছে: X বোতাম ও ESC দুটোই এখান দিয়ে যায়, তাই Phase 13-এ শুধু এই ফাংশনটা বদলে
-    #           "লুকিয়ে ট্রে-তে চলে যাওয়া" করা যাবে (appflow §13) — pyglet-এর ডিফল্ট বন্ধ ব্যবহার করছি না
-    # real world-এ এটা কোথায় দেখা যায়: অ্যাপে একটিই shutdown/close রুটিন, সব কল সেখানে যায়
+    # কী করছে: X বোতাম ও ESC — অ্যাপ বন্ধ না করে উইন্ডো লুকিয়ে ট্রে-তে পাঠায় (appflow §13)
+    # কেন লাগছে: অ্যাপ চলতে থাকলে তবেই হুক ধরা ও সঙ্গীকে দেখা চলতে থাকে; বন্ধ করার পথ ট্রে → Quit
+    # real world-এ এটা কোথায় দেখা যায়: ব্যাকগ্রাউন্ড অ্যাপে X = hide, Quit আলাদা
+    # Phase 10-এ এটি pyglet.app.exit() ছিল; Phase 13-এ শুধু এই ফাংশনটাই বদলাতে হলো
+    hide_window()
+
+
+def quit_app():
+    # কী করছে: সত্যিকারের বন্ধ — ট্রে আইকন থামিয়ে মেইন লুপ থেকে বেরোয় (main-এর finally বাকিটা করে)
+    # কেন লাগছে: ট্রে মেনুর Quit-ই এখন বন্ধ করার একমাত্র পথ (gate: থ্রেড/পোর্ট পরিষ্কারভাবে ছাড়া)
+    # real world-এ এটা কোথায় দেখা যায়: tray অ্যাপের Quit — আইকন সরিয়ে প্রসেস শেষ
+    if _tray is not None:
+        _tray.stop()
     pyglet.app.exit()
 
 
@@ -471,13 +559,15 @@ def on_key_press(symbol, modifiers):
     return EVENT_HANDLED
 
 
-def make_window():
+def make_window(visible=True):
     # কী করছে: অ্যাপের pyglet উইন্ডো বানায় (legacy GL কনটেক্সট চেয়ে) ও আমাদের হ্যান্ডলার বাঁধে
     # কেন লাগছে: ফেজ ০–৮-এর আঁকা পুরোটাই immediate mode (glBegin) ও display list — core profile-এ
     #           এগুলো নেই, তাই স্পষ্ট করে ২.১ compatibility কনটেক্সট চাই
     # real world-এ এটা কোথায় দেখা যায়: পুরনো GL কোড চালাতে compatibility profile চেয়ে নেওয়া
+    # visible=False → --tray মোডে লুকিয়ে শুরু (appflow §13); GL কনটেক্সট তবু তৈরি হয়
     gl_config = pyglet.gl.Config(double_buffer=True, major_version=2, minor_version=1)
     win = pyglet.window.Window(
+        visible=visible,
         width=config.WINDOW_W,
         height=config.WINDOW_H,
         caption=config.WINDOW_TITLE,
@@ -492,14 +582,13 @@ def make_window():
     return win
 
 
-def _start_sync(offline, peer):
+def _start_sync(offline, peer, settings):
     # কী করছে: --offline না হলে ও credentials পেলে sync থ্রেড চালু করে; নাহলে None দিয়ে বলে দেয় কেন
     # কেন লাগছে: নেট/কনফিগ ছাড়াও অ্যাপ পুরোপুরি চলবে — শুধু সঙ্গীকে দেখা যাবে না (appflow §10)
     # real world-এ এটা কোথায় দেখা যায়: ঐচ্ছিক ব্যাকএন্ড — না থাকলে অ্যাপ "লোকাল মোডে" চলে
     if offline:
         print("WSR: --offline — no Supabase sync this run")
         return None
-    settings = userconfig.load(me=_me)
     if not settings.has_supabase:
         print("WSR: no Supabase URL/key found (checked config.json, .env, environment)"
               " — running local only")
@@ -517,7 +606,8 @@ def main():
     # কেন লাগছে: appflow §2-এর স্টার্টআপ ক্রম — bind → state → থ্রেড → উইন্ডো → লুপ
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
     args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
-    global _me, _window, _state, _activity, _listener, _dev, _sync
+    global _me, _window, _state, _activity, _listener, _dev, _sync, _tray, _alert_settings
+    global _animating
     _me = args.me        # আমার হুক এই জনের status চালায়; অন্যজন সঙ্গী (peer)
     _dev = args.dev
     peer = "rifat" if _me == "samee" else "samee"
@@ -526,8 +616,9 @@ def main():
 
     _state = state.AppState(_me, peer, wall_now())
     _activity = activity.Activity(idle_timeout=idle)
-    _listener = listener.Listener(on_event=_events.put, on_show=_show_request.set,
-                                 port=port)
+    _listener = listener.Listener(on_event=_events.put,
+                                  on_show=lambda: _commands.put(tray.SHOW),
+                                  port=port)
 
     if not _listener.try_bind():          # পোর্ট দখল = আরেকটি কপি চলছে (appflow §2)
         if listener.ping_show(port=port):
@@ -539,19 +630,32 @@ def main():
     print("WSR: listening on http://%s:%d  (idle timeout %ds%s)"
           % (config.LISTEN_HOST, port, idle, ", dev mode" if _dev else ""))
 
-    _sync = _start_sync(args.offline, peer)
+    settings = userconfig.load(me=_me)
+    _alert_settings = tray.AlertSettings(store=userconfig.save_alerts)
+    _alert_settings.load(dict(settings.alerts))       # আগে বন্ধ করা অ্যালার্ট বন্ধই থাকে
+    _sync = _start_sync(args.offline, peer, settings)
 
-    _window = make_window()                           # উইন্ডো + GL কনটেক্সট (এখন GLUT নয়, pyglet)
+    _window = make_window(visible=not args.tray)      # উইন্ডো + GL কনটেক্সট (এখন GLUT নয়, pyglet)
     init_scene(*_window.get_framebuffer_size())       # প্রজেকশন/blending + display list তৈরি
 
-    pyglet.clock.schedule_interval(tick, TICK_SECONDS)                    # ~60 FPS অ্যানিমেশন টিক
-    pyglet.clock.schedule_interval(state_tick, config.STATE_TICK_SECONDS)  # প্রতি সেকেন্ডে ডিটেকশন
+    _tray = tray.Tray(_commands, settings_store=_alert_settings)
+    _tray.start()                                     # নিজের থ্রেডে; উইন্ডো ছোঁয় না (techspec §3)
+
+    if not args.tray:                                 # লুকিয়ে শুরু হলে অ্যানিমেশন টিক লাগে না
+        pyglet.clock.schedule_interval(tick, TICK_SECONDS)                # ~60 FPS অ্যানিমেশন টিক
+        _animating = True
+    pyglet.clock.schedule_interval(_pump, config.PUMP_SECONDS)            # ট্রে কমান্ড + হুক ইভেন্ট
+    pyglet.clock.schedule_interval(state_tick, config.STATE_TICK_SECONDS)  # ডিটেকশন + অ্যালার্ট
 
     _push_status(wall_now())                          # শুরুতেই নিজের অবস্থা জানিয়ে দিই
+    print("WSR: tray ready%s" % (" (started hidden)" if args.tray else ""))
 
     try:
-        pyglet.app.run()                              # ইভেন্ট লুপ; ESC/X না চাপা পর্যন্ত চলবে
+        # interval=None → pyglet নিজে রিড্র schedule করে না; আঁকা হয় tick() থেকে (_redraw)
+        pyglet.app.run(interval=None)                 # ইভেন্ট লুপ; ট্রে → Quit না চাপা পর্যন্ত চলবে
     finally:
+        if _tray is not None:
+            _tray.stop()                              # ট্রে আইকন সরিয়ে দিই (zombie আইকন থাকবে না)
         if _sync is not None:
             _sync.stop()
         _listener.stop()                              # পোর্ট ছেড়ে দিই, যাতে পরের কপি bind করতে পারে

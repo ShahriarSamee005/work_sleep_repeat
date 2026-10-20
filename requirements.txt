@@ -1,5 +1,7 @@
 PyOpenGL
 PyOpenGL_accelerate
 pyglet
+pystray
+Pillow
 requests
 python-dotenv
