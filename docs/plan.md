@@ -1,287 +1,352 @@
-# Work•Sleep•Repeat — Build Plan
+# Work•Sleep•Repeat — Build Plan (v2)
 
-## How to use this plan
-
-1. Put all six `.md` files in a `docs/` folder inside the project.
-2. Do the phases **in order**. Paste each phase's prompt into Claude Code.
-3. Don't start the next phase until the **gate** passes.
-4. After each phase, do the **"Understand it"** step. You have to explain and change this code live in the viva, so this step is not optional.
-5. Tick off tasks in `tracker.md`, and write down bugs and discoveries there as they happen. They become your reflection report.
-
-**Standing rule for every prompt:** Claude Code must read `docs/design.md` and `docs/techspec.md` first, and follow the Bangla comment style from techspec section 7.
+> Phases 0–8 are done. v2 continues from Phase 9.
+> Rules for every phase:
+> 1. Read `prd.md`, `techspec.md`, `design.md`, `appflow.md` sections named in the phase before coding.
+> 2. Build only what the phase lists. No extra features.
+> 3. Stop at the verification gate. Don't start the next phase until every check passes and `tracker.md` is updated.
+> 4. If a contract in `techspec.md` needs to change, change the doc first and note it in `tracker.md` → Decisions.
 
 ---
 
-## Phase 0: Project setup
+## Phase overview
 
-**Goal:** empty project that opens a window.
+| Phase | Name | Output | Depends on |
+|---|---|---|---|
+| 9 | Spike: verify assumptions | ✅ Done — see tracker | — |
+| 10 | Local detection | hooks → character moves on one PC; toggle removed; **pyglet window** | 9 |
+| 11 | Supabase sync | two PCs in sync; time today persists; offline handling | 10 |
+| ~~12~~ | ~~Usage limits + split~~ — **DROPPED** (no status line on VS Code/desktop; tracker 2026-10-20) | — |
+| 13 | Tray + alerts | tray icon/menu, close-to-tray, toasts (free, conflict) | 11 |
+| 14 | Dibs | dibs button, bubble, toasts | 13 |
+| 15 | Setup + autostart | first-run dialog, safe settings merge UI, start with Windows | 14 |
+| 16 | Package + cleanup | PyInstaller build running on both PCs | 15 |
+| 17 | 7-day trial | real daily use, bugs fixed, PRD §6 met | 16 |
 
-```text
-Read docs/prd.md, docs/techspec.md, docs/design.md, docs/appflow.md.
-
-Set up the project "work-sleep-repeat" with the exact folder structure from techspec section 2.
-- Create empty modules with a one-line docstring each.
-- Create requirements.txt (PyOpenGL, PyOpenGL_accelerate, requests, python-dotenv).
-- Create .env.example with SUPABASE_URL and SUPABASE_KEY, and a .gitignore that ignores .env and __pycache__.
-- In main.py, parse --me (samee|rifat) and --offline with argparse, then open a 1440x576 GLUT window
-  titled "Work•Sleep•Repeat" that clears to #231c2b. ESC quits.
-- Do NOT implement anything else yet.
-
-Verification:
-1. Run `python main.py --me rifat`. A dark window opens and ESC closes it.
-2. Run `python main.py` with no --me. It prints usage and exits.
-3. If glutInit fails with NullFunctionError, stop and explain how to install freeglut on Windows. Do not work around it.
-```
-
-**Gate:** window opens and closes on ESC.
-**Understand it:** what do `glutInit`, `glutInitDisplayMode`, and `glutMainLoop` do?
+> **Phase numbers kept as-is** though 12 is cut, so references stay stable. Phase 13 now depends on 11. Usage bars, split, status-line text and "limit" alerts are gone everywhere.
 
 ---
 
-## Phase 1: Grid and pixel helpers
+## Phase 9 — Spike: verify assumptions
 
-**Goal:** a 240 × 96 pixel grid with y = 0 at the top.
+**Goal:** answer PRD open questions OQ1 and OQ2 and every **[VERIFY IN SPIKE]** in `techspec.md`, with real evidence, before building anything.
 
-```text
-Read docs/techspec.md sections 3.1, 4.1, 4.2 and docs/design.md sections 3 and 4.
+**Builds (throwaway, in `spike/` only):**
+- `spike/logger_server.py` — tiny server on `127.0.0.1:47821`, logs every `/hook` and `/statusline` body with a timestamp to `spike/logs/`; `/statusline` replies `SPIKE OK`.
+- `spike/install_spike_hooks.py` — backs up `~/.claude/settings.json`, adds the hook command for all six events + status line; `--remove` restores the backup.
+- `spike/glut_tray.py` — GLUT window + `pystray` icon on another thread: hide/show from tray, intercept the X button, send a toast.
+- `spike/pyglet_tray.py` — same test with pyglet, only if GLUT fails.
 
-1. Fill config.py with every constant from techspec 4.1 and every color from design.md section 4.
-   Use the exact names from design.md.
-2. Implement every function in pixel.py from techspec 4.2.
-3. In main.py, set gluOrtho2D(0, 240, 96, 0) and enable alpha blending.
-4. Temporary test in display(): red box at (0,0,10,10), blue box at (230,86,10,10),
-   and a sprite test drawing HEAD_SLEEP at (50,40) (add HEAD_SLEEP to sprites.py from design.md section 7).
-5. Every function gets the Bangla comment block from techspec section 7.
+**Verification gate (you run these by hand):**
+- [ ] Terminal Claude Code: all six events logged with `session_id` and `hook_event_name`.
+- [ ] VS Code Claude Code: same check.
+- [ ] Claude desktop app, Code tab: same check. (Record yes/no — a "no" is a valid finding.)
+- [ ] Status line JSON contains `rate_limits.five_hour` and `seven_day` on your plan. Note `resets_at` format.
+- [ ] With the logger server stopped, a prompt in Claude Code is not slowed down (hook < 1 s, no error shown).
+- [ ] Which shell runs hooks on Windows; `curl` found.
+- [ ] GLUT: window can hide/show from tray, X button hides instead of quitting, toast appears. If not → pyglet result.
+- [ ] `spike/FINDINGS.md` written; `tracker.md` Decisions updated (window layer, supported Claude Code surfaces).
+- [ ] Spike hooks removed, original settings.json restored.
 
-Verification:
-1. The red box is top-LEFT, the blue box is bottom-RIGHT.
-2. The head sprite is not upside down or mirrored.
-3. Pixels are crisp squares, 6x6 screen pixels each.
-Report what you checked.
-```
+````markdown
+# Phase 9 — Spike: verify assumptions (Work•Sleep•Repeat v2)
 
-**Gate:** boxes in the right corners, sprite the right way up.
-**Understand it:** why does `gluOrtho2D(0, 240, 96, 0)` flip the y axis? What breaks if you change it to `(0, 240, 0, 96)`?
+Read `docs/prd.md` §8 and every section marked **[VERIFY IN SPIKE]** in `docs/techspec.md` first.
 
----
+This phase is a spike. Do NOT modify any existing module. Put everything in a new `spike/` folder.
 
-## Phase 2: One static room (idle)
+## Build
+1. `spike/logger_server.py`
+   - `ThreadingHTTPServer` bound to `127.0.0.1:47821`.
+   - `POST /hook` and `POST /statusline`: append `{time, path, body_json_or_raw}` as one JSON line to `spike/logs/events.jsonl`. `/hook` → 204. `/statusline` → 200 `SPIKE OK`.
+   - `GET /health` → `ok`.
+   - Print each event name / session id to the console.
+2. `spike/install_spike_hooks.py`
+   - Path: `%USERPROFILE%\.claude\settings.json` (create `{}` if missing).
+   - First write a backup `settings.json.wsr-spike-backup-<timestamp>`.
+   - Add hooks for SessionStart, UserPromptSubmit, PostToolUse (matcher `*`), Notification, Stop, SessionEnd using exactly the command in techspec §4.2, and the status line command in techspec §5.2.
+   - Append to existing lists; never delete other entries. If a statusLine already exists, print it and ask y/n before replacing.
+   - `--remove`: restore the newest spike backup.
+   - To find the shell: add one extra UserPromptSubmit hook that runs `echo "$SHELL|$0|$(command -v curl)" >> <abs path>/spike/logs/shell.txt || true`.
+3. `spike/glut_tray.py`
+   - Minimal freeglut window (clear to a color) + `pystray` icon started on a background thread.
+   - Tray menu: Show, Hide, Toast, Quit.
+   - Use `glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION)` and `glutCloseFunc` to try to make X hide instead of exit; report exactly what happens.
+   - Menu actions must be marshalled to the GLUT thread (e.g. a thread-safe queue read in the idle/timer func). Don't call GLUT from the tray thread.
+4. `spike/pyglet_tray.py` — only if step 3 fails any check: same test with a pyglet window + legacy OpenGL immediate mode (draw one quad with `glBegin`) to confirm existing PyOpenGL calls would still work.
+5. `spike/FINDINGS.md` — a table: check · result · evidence (paste the relevant log line) · decision.
 
-**Goal:** Samee's room, idle, matching the mockup.
+## Verify (I will do these manually; give me a numbered checklist to follow)
+- Terminal, VS Code, and desktop-app Code tab: each of the six events logged.
+- Status line JSON contains rate_limits; record resets_at format.
+- Logger stopped → Claude Code still responds normally; time the hook.
+- Shell + curl path recorded.
+- GLUT (or pyglet) hide/show/X/toast all work.
+- `--remove` restores settings exactly (diff against backup).
 
-```text
-Read docs/design.md sections 5 and 7 and docs/techspec.md section 4.5.
-
-1. Add every sprite from design.md section 7 to sprites.py.
-2. Implement room.py: draw_wall_and_floor, draw_decor, draw_bed(messy=False), draw_desk, draw_chair,
-   draw_rug, draw_screen(on=False), draw_lamp_shade(on=False, warn=False).
-   Use EXACTLY the coordinates in design.md section 5, read from config.py.
-   All coordinates are room-local.
-3. In main.py, draw Samee's room with glTranslatef(2, 2, 0) inside glPushMatrix/glPopMatrix,
-   and draw the sleeping head at its bed position.
-4. Draw the 2-pixel outer frame.
-5. Do NOT build display lists yet. Do NOT do lighting yet.
-
-Verification:
-1. Compare with the left room of the Idle mockup: bed on the left, desk center-right against the wall,
-   chair below the desk, rug in the lower middle, plant in the right corner, poster on the wall.
-2. The floor has plank lines and seams, not a flat color.
-3. List any coordinate you had to change from design.md and why.
-```
-
-**Gate:** looks like the left room of the idle mockup (without the dark tint).
-**Understand it:** open `room.py`, pick one object, and change its color and position yourself.
-
----
-
-## Phase 3: Two rooms with reflection + display lists
-
-**Goal:** Rifat's room as a mirror image, and faster drawing.
-
-```text
-Read docs/techspec.md sections 3.2, 3.3, 3.4.
-
-1. Draw Rifat's room using the same room functions with glTranslatef(97 + 93, 2, 0) and glScalef(-1, 1, 1).
-   Samee's rug is grey-blue, Rifat's is green (design.md section 4).
-2. Draw the divider at x 95-96 with the two colors from design.md section 3.
-3. Draw "Samee" and "Rifat" name labels OUTSIDE the mirrored matrix so text is not backwards.
-4. Implement room.build_room_lists(): display lists for neat and messy variants per rug color.
-   (Messy blanket can be a placeholder for now.) Use glCallList in display().
-5. Print the FPS to the console once per second.
-
-Verification:
-1. Rifat's room is an exact mirror: bed on the right, desk center-left.
-2. The labels read normally.
-3. FPS is 60, or close to it.
-4. Remove glScalef(-1,1,1) temporarily and describe what happens, then put it back.
-```
-
-**Gate:** correct mirror, readable labels, smooth FPS.
-**Understand it:** explain why the translate is `97 + 93` and not `97` when mirroring.
+Finish by summarising the findings and proposing the decisions to record in `docs/tracker.md`. Do not start Phase 10.
+````
 
 ---
 
-## Phase 4: Hand-written algorithms
+## Phase 10 — Local detection
 
-**Goal:** all 5 CG algorithms in `algorithms.py`, each testable on its own.
+**Goal:** real Claude Code activity on this PC moves *my* character. The toggle is gone. No network yet. **Also: move the window from GLUT to pyglet** — Phase 9 found GLUT's X button quits instead of hiding, and we need hide-to-tray later.
 
-```text
-Read docs/techspec.md section 4.3.
+**Reads:** techspec §3, §4, §7, §8, §11 · appflow §2–6, §15 · design §2 (toggle removal only) · tracker Decisions (pyglet, Git Bash shell, VS Code + desktop surfaces, usage dropped).
 
-1. Implement every function in algorithms.py by hand: no library does the algorithm.
-   - boundary_fill must use an explicit stack, not recursion.
-   - cohen_sutherland must use compute_outcode with named bit constants.
-2. Add a test block under `if __name__ == "__main__":` in algorithms.py that prints results for:
-   a line from (0,0) to (7,3); bezier t=0, 0.5, 1; a fill on a small 6x6 test grid;
-   a circle of radius 3; lines fully inside, fully outside, and crossing the clip rect.
-3. Build the messy blanket from design.md section 5 using bresenham_line for the outline and
-   boundary_fill for the inside, and use it in the ROOM_MESSY display lists.
+**Phase 10 runs in two steps with a gate between them.** The window swap touches everything the rooms draw, so prove it alone before adding detection on top.
 
-Verification:
-1. `python algorithms.py` prints correct results. Explain each expected value.
-2. Temporarily force messy=True: the messy blanket looks like the Working mockup.
-```
+**Step A — window swap:** move only the windowing/event/loop layer from GLUT to pyglet. All phase 0–8 drawing (immediate-mode `glBegin`, display lists) must keep working unchanged behind it. The spike's `pyglet_tray.py` already proved legacy GL renders under pyglet.
 
-**Gate:** tests pass, messy blanket matches the mockup.
-**Understand it:** this is the most important phase for the viva. For each algorithm, explain in your own words what each line does. Practice: "delete this line, what happens?"
+Step A gate:
+- [ ] pyglet window opens; rooms render exactly as before (characters, lamp, lighting, panel).
+- [ ] `D` debug, `G` grid, `ESC`, keys `1`/`2` all still work.
+- [ ] Window **X** is routed through our own close handler (quits cleanly for now; becomes hide-to-tray in Phase 13), not pyglet's default.
+- [ ] No GLUT import left in `main.py`; app runs with freeglut absent.
 
----
+**Step B — detection:** wire hooks → my character, toggle removed.
 
-## Phase 5: Working state (no animation)
+Step B gate:
+- [ ] `pytest` green (activity rules incl. idle timeout, stale cap, multiple sessions; settings merge/remove incl. invalid JSON, idempotent install).
+- [ ] `python claude_settings.py install` → prompt in Claude Code (VS Code or desktop Code tab) → my character goes to the desk within ~1 s.
+- [ ] Claude finishes → still working; after `IDLE_TIMEOUT` (60 s via `--idle` for the test) → back to bed.
+- [ ] Two Claude Code sessions: closing one doesn't send me to bed.
+- [ ] App closed → Claude Code works normally (this also covers the deferred NFR1 no-slowdown check).
+- [ ] Second copy of the app exits and shows the first one's window.
+- [ ] `--dev` keys 1/2 still drive my character; without `--dev` they do nothing.
+- [ ] `python claude_settings.py remove` leaves settings.json identical to before install (diff).
 
-**Goal:** keys `1` / `2` instantly switch between sleeping and working.
+````markdown
+# Phase 10 — Local detection + pyglet window (Work•Sleep•Repeat v2)
 
-```text
-Read docs/design.md section 6 and docs/appflow.md section 3.
+Read first: `docs/techspec.md` §3, §4, §7, §8, §11 and `docs/appflow.md` §2–6, §15. Also read `docs/tracker.md` → Decisions (Phase 9 spike) and FOLLOW them: window layer is **pyglet** (GLUT's X quits instead of hiding), hook shell is Git Bash, supported surfaces are VS Code + desktop Code tab (no terminal CLI, no status line, no usage feature).
 
-1. Implement the sitting pose (HEAD_BACK, BODY_BACK, arms) with the typing animation.
-2. Implement draw_screen(on=True) with code lines, and draw_lamp_shade(on=True).
-3. Keys 1 and 2 toggle Samee/Rifat between IN_BED and WORKING instantly (temporary).
-   The bed switches to messy when not IN_BED.
+Diagnose before changing: open `main.py`, `panel.py`, `character.py` and describe in 5–10 lines (a) how GLUT currently owns the window, main loop, timer and keyboard/mouse callbacks, and (b) how the toggle sets the character's target. Then make changes. Do NOT touch the drawing internals of pixel/room/character/lighting beyond what the window swap strictly requires.
 
-Verification:
-1. Pressing 1 makes Samee's side match the Working mockup (lighting not done yet).
-2. Hands alternate typing.
-3. Rifat's side works the same, mirrored.
-```
+## Step A — swap GLUT → pyglet (STOP and let me verify before Step B)
+1. Replace only the window/loop/event layer in `main.py` with pyglet: a `pyglet.window.Window`, an `on_draw` handler, `pyglet.clock.schedule_interval` for the tick (replacing `glutTimerFunc`), and `on_key_press` / `on_mouse_press` (replacing GLUT callbacks). Keep the existing projection so the 240×96 grid at 6× maps identically (orthographic projection matching the old `gluOrtho2D`/viewport, y=0 at top).
+2. All phase 0–8 drawing (immediate-mode `glBegin/glEnd`, display lists) must be called unchanged from `on_draw`. If display lists misbehave under pyglet's context, report it — do not rewrite the drawing.
+3. Intercept window close via `on_close`: for now call `pyglet.app.exit()` cleanly, but route it through our own handler so Phase 13 can switch it to hide-to-tray. No pyglet default close.
+4. Remove GLUT imports/usage from `main.py`; the app must run with freeglut absent.
 
-**Gate:** both states look right with instant switching.
+## Step B — detection
+5. `config.py`: add `LISTEN_HOST="127.0.0.1"`, `LISTEN_PORT=47821`, `IDLE_TIMEOUT=600`, `TURN_STALE_CAP=1800`, `TZ="Asia/Dhaka"`. No magic numbers elsewhere.
+6. `clock.py`: `now()`, `dhaka_today()`, `parse_ts(value)` (accept unix seconds or ISO — keep dual-format; cheap), `fmt_duration(seconds)`.
+7. `state.py`: `AppState` with one `threading.Lock`, frozen `PersonView`, `StateSnapshot` per techspec §7. `snapshot()` returns a copy. Peer can be a placeholder. Omit `UsageView` (usage dropped); if §7 lists it, skip it and say so in your reply.
+8. `activity.py`: pure logic per techspec §4.4. `handle(event: dict, now)` and `tick(now) -> bool`. No threading, no I/O inside. Injected clock for tests.
+9. `listener.py`: `ThreadingHTTPServer` on 127.0.0.1:47821 in a daemon thread. Routes per techspec §8, EXCEPT `/statusline`: no longer a feature — reply `204` and ignore the body (keep the route so a stale installed hook can't error). Reject non-local clients, cap body 256 KB, never raise into the server loop. `try_bind()` → False if port taken; then `POST /show` and exit.
+10. `claude_settings.py`: install/remove per techspec §4.3 merge rules, CLI `install|remove|status`. **Install only the six hooks — NOT a statusLine** (dropped). If a foreign statusLine exists, leave it untouched. Returns a result object for the later setup UI.
+11. `main.py`: start listener; each second call `activity.tick()` and write `me.working` into `AppState` (set `since` on change); each `on_draw` pass `snapshot()` to render modules. Add `--dev` (keys 1/2 inject fake events), `--port N` (dev only) and `--idle N` (dev only, overrides IDLE_TIMEOUT).
+12. `panel.py`: remove the toggle drawing and click handling. Leave its space empty for now. Keep everything else.
+13. Tests: `tests/test_activity.py`, `tests/test_claude_settings.py` (temp dirs; never touch the real settings file).
 
----
+Keep the layer rules in techspec §3. Render modules must not import state/activity/listener.
 
-## Phase 6: Animation (state machine + Bezier walk)
-
-**Goal:** the full get-up, walk, sit sequence.
-
-```text
-Read docs/appflow.md section 3 and docs/techspec.md section 4.6.
-
-1. Implement the Character class exactly as in techspec 4.6, with all 8 states from appflow section 3.
-2. Walking uses cubic_bezier with ease_in_out and the WALK_P0..P3 points from config.
-3. Walk frames alternate every STEP_INTERVAL. Add the 1-pixel bob and the sit squash (glScalef).
-4. Monitor turns on DEVICE_DELAY after sitting, lamp DEVICE_DELAY after that. Reverse order when leaving.
-5. Reversing mid-walk: progress = 1 - progress (appflow section 3).
-6. Use glutTimerFunc with real dt from time.perf_counter().
-7. Keys 1/2 now call set_working instead of switching instantly.
-
-Verification:
-1. Press 1: Samee gets up, walks a curved path over the rug, sits, the monitor turns on, then the lamp.
-2. Press 1 again: the reverse happens, and the blanket becomes neat only after he is back in bed.
-3. Press 1 twice quickly mid-walk: he turns around smoothly, no jump.
-4. Change WALK_TIME in config to 1.0 and confirm it is faster.
-```
-
-**Gate:** all four checks pass.
-**Understand it:** explain the Bezier formula and why `ease_in_out` makes the walk look natural.
+## Verify
+After Step A, STOP for my manual check (rooms render, D/G/ESC/1/2 work, X is ours). After Step B, run `pytest`, then give me a numbered manual checklist covering the Step B gate in `docs/plan.md` (use `--idle 60`). Update `docs/tracker.md`. Stop after this phase.
+````
 
 ---
 
-## Phase 7: Lighting + debug view
+## Phase 11 — Supabase sync
 
-**Goal:** cozy dark rooms and a warm lamp glow that stays inside its room.
+**Goal:** both PCs see each other in real time. Time today persists and resets at Dhaka midnight. Offline doesn't break anything.
 
-```text
-Read docs/design.md section 8 and 11, and docs/techspec.md section 4.7.
+**Reads:** techspec §6, §10 (supabase fields), §12 · appflow §3, §5, §10–12 · design §2.1, §2.4, §3 (offline).
 
-1. Implement lighting.py in the draw order from design.md section 8.
-2. Glow circles use scanline_circle and skip cells outside the room.
-3. Rays use cohen_sutherland against the room rect, then bresenham_line.
-4. Emissive parts (screen, lamp shade, bulb) are redrawn after the lighting.
-5. Key D: debug overlay from design.md section 11 (grid, Bezier curve + control points,
-   clip rects, rays unclipped in red and clipped in green). Key G: grid only.
+**Builds:** `supabase/schema.sql` (tables + functions + grants from techspec §6), `sync.py`, `userconfig.py` (read-only for now + `.env` fallback), time-today logic, panel status text + online dots + connection line, offline room overlay.
 
-Verification:
-1. Idle rooms are dim blue. A working room has a warm stepped glow around the lamp.
-2. The glow and rays never cross the divider (check with D).
-3. The screen and lamp shade stay bright.
-4. Compare side by side with both mockup frames.
-```
+**Verification gate:**
+- [ ] `schema.sql` runs clean on a fresh Supabase project; anon key can call the three RPCs and **cannot** select/update tables directly.
+- [ ] Two copies on one PC (`--me rifat` default port, `--me samee --port 47822 --dev`): key 1 on Samee's copy → Rifat's copy shows Samee working within 3 s.
+- [ ] Real prompt on PC A → PC B updates within 3 s (once both PCs have it).
+- [ ] Wi-Fi off → "offline — retrying", no freeze, detection still works; Wi-Fi on → catches up.
+- [ ] Kill peer app → after ~60 s shows "Samee is offline" + darker room.
+- [ ] Restart app mid-day → time today continues. Change system date/time zone test or unit test for midnight Dhaka reset.
+- [ ] Sleep PC 2+ min, wake → reconnects without restart.
+- [ ] Unit tests for outbox latest-wins, backoff sequence, time-jump detection, midnight split.
 
-**Gate:** matches the mockup, clipping visible in debug.
+````markdown
+# Phase 11 — Supabase sync (Work•Sleep•Repeat v2)
 
----
+Read first: `docs/techspec.md` §6, §7, §10, §12 and `docs/appflow.md` §3, §5, §10–12, `docs/design.md` §2.1, §2.4, §3.
 
-## Phase 8: Panel
+Diagnose first: check what the old `sync.py` stub contains and whether anything imports it. Report before replacing it.
 
-**Goal:** the right-side panel with a working toggle and time counters.
+## Build
+1. `supabase/schema.sql`: tables, seed rows, the four functions (security definer, search_path=public), RLS on, grants/revokes exactly as techspec §6.3. Idempotent where practical (`create or replace`, `if not exists`).
+2. `userconfig.py`: load `%APPDATA%\WorkSleepRepeat\config.json` if present, else `.env` (`SUPABASE_URL`, `SUPABASE_KEY`), `--me` overrides. Read-only this phase.
+3. `sync.py`: daemon thread per techspec §6.4. `requests.Session`, 5 s timeout. Outbox with latest-wins per kind. Heartbeat every 20 s. Backoff 2→4→8→16→30. Time-jump (>30 s) → immediate reconnect + full re-push. Applies `wsr_get_state` into `AppState` under the lock, including `server_now` offset and peer online (heartbeat > 60 s = offline). Never touches OpenGL.
+4. Startup: read own row; resume `today_seconds` if `today_date == dhaka_today()`.
+5. Time today: accumulate while working (1 Hz in main), push on change and every 60 s while working, reset at Dhaka midnight (`clock.py` helper, unit tested).
+6. `panel.py`: status text rules from design §2.1, online dots, bottom connection line. Reads the snapshot only.
+7. Offline room: extra darkness on the peer's room + "OFFLINE" plaque when peer is offline (design §3). Reuse the lighting overlay.
+8. `--offline` flag skips the sync thread entirely.
+9. Tests: outbox, backoff, time-jump, midnight split, applying a sample `wsr_get_state` JSON to state. Mock HTTP; no real network in tests.
 
-```text
-Read docs/design.md section 9, docs/techspec.md section 4.8, docs/appflow.md sections 5-7.
-
-1. Implement panel.py: icon (moon/sun), title, status lines, toggle, two time cards, conflict warning.
-2. Mouse click on the toggle toggles the --me user's status (local only for now).
-3. Time tracking per appflow section 6 (local only for now).
-4. Conflict: both working → "Both working!" and red blinking lamp shades.
-
-Verification:
-1. Clicking the toggle does the same as pressing that user's key.
-2. The time counter increases while working and stops when off.
-3. Both working → the warning shows.
-```
-
-**Gate:** panel fully works locally.
+## Verify
+`pytest`, then walk me through the Phase 11 gate in `docs/plan.md` as a numbered checklist, including how to create the Supabase project and run `schema.sql`, and a query to prove anon can't read tables directly. Update `docs/tracker.md`. Stop after this phase.
+````
 
 ---
 
-## Phase 9: Real-time sync
+## ~~Phase 12 — Usage limits + split~~ — DROPPED (2026-10-20)
 
-**Goal:** two laptops show the same thing.
+**Why:** usage %s come only from Claude Code's terminal status line. The user works in VS Code and the desktop Code tab, where the status line never runs (confirmed in the Phase 9 spike — zero `/statusline` events, and no `claude` CLI installed). A number that only refreshes in the terminal would sit stale in daily use, which is worse than showing nothing.
 
-```text
-Read docs/techspec.md sections 4.9, 5, 9 and docs/appflow.md sections 4 and 9.
+**What this removes everywhere:** usage bars, reset countdowns, usage "updated ago", the R/S usage split, the `/statusline` feature and its status-line reply text, the "limit" toasts (Phase 13), and the usage-related Supabase pieces (`wsr_usage`, `wsr_usage_share`, `wsr_report_usage`, `wsr_credit`, the `usage`/`shares` parts of `wsr_get_state`). The `/statusline` HTTP route stays but just returns 204, so any stale installed hook can't error.
 
-1. Give me the SQL to create the `status` table and insert rows for samee and rifat,
-   plus the RLS policy needed. I will run it in Supabase myself.
-2. Implement sync.py with requests and a daemon polling thread, protected by a Lock.
-   The GLUT thread must never wait on the network.
-3. The toggle PATCHes in a background thread. The local state updates immediately.
-4. Panel shows "offline" when polling fails. --offline skips sync entirely.
-
-Verification:
-1. Run two instances: `--me rifat` and `--me samee`. Toggling in one appears in the other within about 3 s.
-2. Turn off Wi-Fi: the app keeps running, shows offline, and keys still work.
-3. The window never freezes during a slow network call.
-```
-
-**Gate:** two instances stay in sync. Offline mode is safe.
+**If it comes back later** (browser extension, or a future API that works outside the terminal): the full spec is preserved in techspec §5 / design §2.2 and this plan's git history. It would slot back in as its own phase.
 
 ---
 
-## Phase 10: Finish and prepare
+## Phase 13 — Tray + alerts
 
-- [ ] Check every function has the Bangla comment block
-- [ ] Remove dead test code, keep the `algorithms.py` self-test
-- [ ] README with how to run, screenshots, and the GitHub link
-- [ ] Write the Part 1 page (answers are in `prd.md` section 8)
-- [ ] Write the Part 3 reflection from `tracker.md` notes
-- [ ] Rehearse the 2-minute demo (script in `tracker.md`)
-- [ ] Practice every live edit in `techspec.md` section 8 at least once
+**Goal:** the app lives in the tray, closing hides it, and it tells you things without you looking.
+
+**Reads:** techspec §9 · appflow §5, §9, §13 · design §4, §5.
+
+**Builds:** `tray.py` (icon from sprite grids, menu, notify), `alerts.py`, close-to-tray + ESC hide, `--tray`, alert on/off settings saved to config.
+
+**Verification gate:**
+- [ ] Tray icon changes with state (free / peer working / me working / conflict / offline); tooltip correct.
+- [ ] X and ESC hide; tray "Open rooms" shows; Quit exits cleanly (no zombie threads, port released).
+- [ ] Toasts: It's free, conflict (>30 s overlap). Each fires once, not repeatedly. (**No limit toasts — usage dropped.**)
+- [ ] Each alert can be turned off and stays off after restart.
+- [ ] `--tray` starts hidden.
+- [ ] Window hidden → CPU < ~2% (render loop throttled when hidden).
+- [ ] Unit tests for `alerts.py` transitions and dedupe with scripted snapshots.
+
+````markdown
+# Phase 13 — Tray + alerts (Work•Sleep•Repeat v2)
+
+Read first: `docs/techspec.md` §9, `docs/appflow.md` §5, §9, §13, `docs/design.md` §4, §5, and `docs/tracker.md` Decisions. Note: usage is dropped, so **skip the "limit" alert rows** in techspec §9 and design §5. Window layer is pyglet (Phase 10).
+
+## Build
+1. `tray.py`: `pystray` on its own thread. Icons generated at runtime from new sprite grids (16/32 px) per design §4. Menu per techspec §9 — but drop any usage/limit menu items; dibs item is a disabled placeholder until Phase 14; integration items call `claude_settings`. All window actions go through a thread-safe queue consumed on the pyglet window thread — never touch the window from the tray thread.
+2. `alerts.py`: pure function `check(prev: StateSnapshot, cur: StateSnapshot, memory) -> list[Toast]` with dedupe memory. Implement only the **It's free** and **Conflict** rows (plus dibs rows arrive in Phase 14). Do NOT implement the 5h/weekly limit toasts. Copy wording from design §5.
+3. `main.py`: run `alerts.check` at 1 Hz, send toasts via `tray.notify`. Make the Phase 10 `on_close` handler now **hide to tray** instead of exit; ESC also hides. `--tray` → start hidden. Throttle rendering when hidden (stop redraw, keep a 1 Hz timer for tick/alerts).
+4. `userconfig.py`: now also writes (alerts on/off). Atomic write (temp file + replace).
+5. Tests: `tests/test_alerts.py` with scripted snapshot sequences for the free + conflict rows.
+
+## Verify
+`pytest`, then the Phase 13 gate from `docs/plan.md` as a numbered checklist (use `--dev` + `--port` second copy to trigger peer transitions). Update `docs/tracker.md`. Stop after this phase.
+````
 
 ---
 
-## Tips for working with Claude Code
+## Phase 14 — Dibs
 
-- Keep one phase per session so its context stays focused.
-- If something looks wrong, ask it to **diagnose first**: "Explain why X happens before changing anything."
-- After each phase, ask: "Walk me through every function you wrote in this phase, in simple language."
-- Make at least one change yourself by hand in every phase. That's your viva practice.
+**Goal:** "I want it next" without interrupting.
+
+**Reads:** techspec §9 (dibs rules) · appflow §8 · design §2.3, §3, §5.
+
+**Builds:** dibs state + push, panel button (clickable), tray item, bubble sprite, auto-clear rules, toasts.
+
+**Verification gate:**
+- [ ] Button only visible while peer is working.
+- [ ] Call dibs → peer gets toast + sees bubble within 3 s.
+- [ ] Peer stops → I get "Your turn" (not the plain "free" toast).
+- [ ] I start working → dibs clears; cancel clears; 2 h expiry clears (unit test).
+- [ ] Tray item mirrors panel button.
+
+````markdown
+# Phase 14 — Dibs (Work•Sleep•Repeat v2)
+
+Read first: `docs/techspec.md` §6.1 (`wants_next*`), §9, `docs/appflow.md` §8, `docs/design.md` §2.3, §3, §5.
+
+## Build
+1. State: `me.wants_next`, `wants_next_at`; push via `wsr_update_status`.
+2. Rules: auto-clear when I start working, on cancel, or after `DIBS_EXPIRE` (config, 2 h). Button hidden when peer isn't working.
+3. `panel.py`: clickable dibs button with the three states in design §2.3 (hit-testing in grid units, same style as the old toggle).
+4. `sprites.py`: `BUBBLE_DIBS`; draw above the character who called dibs, 1 Hz bob.
+5. `tray.py`: enable the dibs menu item.
+6. `alerts.py`: "Samee wants it next"; "Your turn" replaces "Claude is free" when I had dibs.
+7. Tests for rules and alerts.
+
+## Verify
+`pytest`, then the Phase 14 gate from `docs/plan.md` as a numbered checklist. Update `docs/tracker.md`. Stop after this phase.
+````
+
+---
+
+## Phase 15 — Setup + autostart
+
+**Goal:** Samee can set it up without editing any file.
+
+**Reads:** techspec §4.3, §10, §11 · appflow §1, §14 · design §7.
+
+**Builds:** `setup_ui.py`, `autostart.py`, `userconfig.py` write path, `--setup`, tray "Start with Windows" + integration items wired.
+
+**Verification gate:**
+- [ ] Fresh Windows user profile (or deleted config): dialog appears, Test connection works (✓ and a readable error).
+- [ ] Hooks installed; dialog tells the user to restart open Claude Code sessions.
+- [ ] Start with Windows on → after reboot app is in tray, window hidden. Off → gone from Run key.
+- [ ] Tray Remove hooks → settings.json back to pre-install (diff). Reinstall works.
+- [ ] Setup never runs while the pyglet window exists (runs before it).
+
+````markdown
+# Phase 15 — Setup + autostart (Work•Sleep•Repeat v2)
+
+Read first: `docs/techspec.md` §4.3, §10, §11, `docs/appflow.md` §1, §14, `docs/design.md` §7.
+
+## Build
+1. `setup_ui.py`: tkinter dialog per design §7, run before the pyglet window is created and fully destroyed after. Validates inputs; Test connection calls `wsr_get_state` with a 5 s timeout.
+2. Install the six hooks via `claude_settings.install()`. No status line is installed (usage dropped). Any existing statusLine is left untouched.
+3. `autostart.py`: HKCU `Software\Microsoft\Windows\CurrentVersion\Run` value `WorkSleepRepeat` = `"<exe or python main.py path>" --tray`. add/remove/is_enabled.
+4. `userconfig.py`: full save (atomic). `--setup` forces the dialog.
+5. Tray: Start with Windows toggle, Reinstall hooks, Remove hooks wired.
+6. Tests: config round-trip, autostart command string building (mock winreg).
+
+## Verify
+`pytest`, then the Phase 15 gate from `docs/plan.md` as a numbered checklist. Update `docs/tracker.md`. Stop after this phase.
+````
+
+---
+
+## Phase 16 — Package + cleanup
+
+**Goal:** a build Samee can unzip and run. No Python needed.
+
+**Builds:** `build.spec` / build script, bundled **pyglet** runtime deps (no freeglut — window layer is pyglet), app version constant, log file, tech-debt cleanup.
+
+**Verification gate:**
+- [ ] `build.bat` produces `dist/WorkSleepRepeat/` with `WorkSleepRepeat.exe`.
+- [ ] Runs on a PC with **no Python installed** (Samee's, or a clean VM).
+- [ ] No console window. Logs in `%APPDATA%\WorkSleepRepeat\wsr.log`, rotating.
+- [ ] Autostart points at the exe, not python.
+- [ ] Hook commands work from the packaged app.
+- [ ] FPS no longer printed to terminal (debug view only).
+- [ ] Antivirus / SmartScreen behaviour noted in tracker (unsigned exe warning expected).
+
+````markdown
+# Phase 16 — Package + cleanup (Work•Sleep•Repeat v2)
+
+Read first: `docs/tracker.md` (window layer = pyglet), `docs/techspec.md` §2, §11.
+
+Diagnose first: list every runtime file the app needs (pyglet's DLLs/shaders, fonts if any). Report before writing the spec file.
+
+## Build
+1. `build.spec` + `build.bat`: PyInstaller `--onedir --windowed`, include pyglet's bundled deps (hidden imports / data as needed), name `WorkSleepRepeat`, icon generated from the tray sprite at build time.
+2. `config.py`: `APP_VERSION`. Sent as `app_version` in status updates.
+3. Logging to `%APPDATA%\WorkSleepRepeat\wsr.log` via `RotatingFileHandler` (1 MB × 3). Replace prints.
+4. Remove the terminal FPS print (debug view only). Resolve other items in tracker → Tech debt if small.
+5. `README.md`: install steps for a friend (unzip → run → setup dialog), how to remove hooks, how to uninstall.
+
+## Verify
+Give me the Phase 16 gate from `docs/plan.md` as a numbered checklist, including testing on a machine without Python. Update `docs/tracker.md`. Stop after this phase.
+````
+
+---
+
+## Phase 17 — 7-day trial
+
+**Goal:** PRD §6 success criteria.
+
+- Both install the packaged build and use it normally for 7 days.
+- Every issue goes into `tracker.md` → Bugs with date, what happened, and the log snippet.
+- Fix with the diagnose-first rule: reproduce → find cause → smallest fix → add a test.
+- Done when: 7 days, no "are you on it?" messages, no unfixed crash/stuck status, usage within a few % of `/usage`.
+
+Then decide the next step (browser extension for claude.ai, polish backlog, or opening it up — which needs the security redo first).

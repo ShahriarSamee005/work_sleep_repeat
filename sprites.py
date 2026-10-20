@@ -1,5 +1,3 @@
-"""sprites.py — টেক্সট-গ্রিড স্প্রাইট ও তাদের কালার ম্যাপ (design.md §7)।"""
-
 import config
 
 # ক্যারেক্টার স্প্রাইটের সাধারণ legend: '#' = OUTLINE, 'W' = SKIN, 'S' = SKIN_S, '.' = transparent

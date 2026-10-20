@@ -1,4 +1,7 @@
 import argparse
+import queue
+import sys
+import threading
 import time
 
 from OpenGL.GL import (
@@ -26,14 +29,17 @@ from OpenGL.GLU import gluOrtho2D
 import pyglet
 from pyglet.event import EVENT_HANDLED
 from pyglet.window import key as pyglet_key
-from pyglet.window import mouse as pyglet_mouse
 
+import activity
 import character
+import clock
 import config
 import font
 import lighting
+import listener
 import panel
 import room
+import state
 from pixel import draw_rect, draw_text, hex_to_rgb, text_width
 
 TICK_SECONDS = 1.0 / 60.0         # অ্যানিমেশন টিকের ব্যবধান (আগের glutTimerFunc-এর ১৬ms)
@@ -55,8 +61,16 @@ rifat = character.Character("rifat")
 _start_time = time.perf_counter()
 _fake_time = None
 
-# --me: কোন ব্যবহারকারী এই অ্যাপ চালাচ্ছে (প্যানেল টগল এই জনকে নিয়ন্ত্রণ করে); main() সেট করে
+# --me: কোন ব্যবহারকারী এই অ্যাপ চালাচ্ছে (হুক এই জনের status চালায়); main() সেট করে
 _me = "samee"
+
+# ডিটেকশন অংশ (Phase 10) — main() তৈরি করে; হুক ইভেন্ট listener থ্রেড থেকে queue হয়ে আসে
+_state = None        # state.AppState — working/since/today_seconds-এর একমাত্র সত্য
+_activity = None     # activity.Activity — হুক ইভেন্ট → working (pure logic)
+_listener = None     # listener.Listener — 127.0.0.1:47821
+_events = queue.Queue()   # listener থ্রেড ভরে, main থ্রেড খালি করে (activity একাই main-এ চলে)
+_show_request = threading.Event()   # দ্বিতীয় কপির POST /show — main থ্রেডে উইন্ডো দেখাতে
+_dev = False         # --dev: কী 1/2 নকল ইভেন্ট ঢালে
 
 # ওয়াল-ক্লক (সময় হিসাব ও দিন): virtual now = শুরু + অতিবাহিত বাস্তব সময় × TIME_SCALE।
 # TIME_SCALE বাড়ালে কার্ড দ্রুত বাড়ে ও মধ্যরাত রিসেট দ্রুত টেস্ট করা যায়। snapshot _fake_wall সেট করতে পারে।
@@ -104,7 +118,25 @@ def parse_args():
         action="store_true",
         help="run without Supabase sync",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="dev mode: keys 1/2 inject fake hook events, FPS in the debug view",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="dev only (needs --dev): listen on another port, to run two copies on one PC",
+    )
+    parser.add_argument(
+        "--idle",
+        type=int,
+        help="dev only (needs --dev): override IDLE_TIMEOUT in seconds for manual tests",
+    )
+    args = parser.parse_args()
+    if not args.dev and (args.port is not None or args.idle is not None):
+        parser.error("--port and --idle are dev-only; add --dev to use them")
+    return args
 
 
 def init_gl(fb_w=config.WINDOW_W, fb_h=config.WINDOW_H):
@@ -243,8 +275,10 @@ def display():
     glClear(GL_COLOR_BUFFER_BIT)
 
     now = wall_now()
-    # দ্বন্দ্ব: দুজনেই কাজ করছে (target) → ল্যাম্প শেড প্রতি 0.5s লাল-হলুদ ব্লিঙ্ক (appflow §7)
-    conflict = samee.target_working and rifat.target_working
+    views = _views(_state.snapshot(now))     # প্রতি ফ্রেমে একবার snapshot (techspec §7)
+
+    # দ্বন্দ্ব: দুজনেই কাজ করছে → ল্যাম্প শেড প্রতি 0.5s লাল-হলুদ ব্লিঙ্ক (appflow §7)
+    conflict = views["samee"].working and views["rifat"].working
     blink_on = int(anim_time() / config.CONFLICT_BLINK_SECONDS) % 2 == 0
     warn = conflict and blink_on
 
@@ -255,12 +289,12 @@ def display():
     _draw_frame()
     _draw_labels()   # mirror matrix-এর বাইরে, তাই লেখা সোজা
 
-    # প্যানেল (design §9) — প্রতিজনের working ও আজকের সময় দিয়ে state বানিয়ে আঁকি
-    state = {
-        "samee": {"working": samee.target_working, "seconds": samee.time_today(now)},
-        "rifat": {"working": rifat.target_working, "seconds": rifat.time_today(now)},
+    # প্যানেল (design §9) — snapshot থেকে প্রতিজনের working ও আজকের সময় নিয়ে আঁকি
+    panel_state = {
+        name: {"working": view.working, "seconds": view.today_seconds}
+        for name, view in views.items()
     }
-    panel.draw_panel(state, _me, now)
+    panel.draw_panel(panel_state, _me, now)
 
     if _debug:
         _draw_debug_labels()   # ডিবাগ text-ও mirror matrix-এর বাইরে
@@ -269,10 +303,13 @@ def display():
 
 
 def _tick_fps():
-    # কী করছে: প্রতি ফ্রেম গুনে সেকেন্ডে একবার FPS কনসোলে ছাপে (Phase 10-এ সরিয়ে ফেলব)
-    # কেন লাগছে: display list ঠিকমতো কাজ করছে ও রেন্ডার যথেষ্ট দ্রুত কিনা তা যাচাই করতে
-    # real world-এ এটা কোথায় দেখা যায়: গেমের performance HUD/console-এ FPS দেখানো
+    # কী করছে: প্রতি ফ্রেম গুনে সেকেন্ডে একবার FPS কনসোলে ছাপে — শুধু ডিবাগ ভিউতে (appflow §15)
+    # কেন লাগছে: display list ঠিকমতো কাজ করছে ও রেন্ডার যথেষ্ট দ্রুত কিনা তা যাচাই করতে;
+    #           স্বাভাবিক রানে কনসোল পরিষ্কার থাকে, তাই ডিটেকশনের লাইনগুলো চোখে পড়ে
+    # real world-এ এটা কোথায় দেখা যায়: গেমের performance HUD — ডিবাগ বিল্ডে/ভিউতে দেখানো
     global _fps_count, _fps_t0
+    if not _debug:
+        return
     now = time.perf_counter()
     if _fps_t0 is None:
         _fps_t0 = now
@@ -283,14 +320,63 @@ def _tick_fps():
         _fps_t0 = now
 
 
+def _views(snap):
+    # কী করছে: snapshot-এর me/peer ভিউ দুটিকে {"samee": view, "rifat": view} রূপে সাজায়
+    # কেন লাগছে: রুম ও কার্ড সবসময় বাঁয়ে Samee, ডানে Rifat — কে অ্যাপ চালাচ্ছে তা নির্বিশেষে
+    # real world-এ এটা কোথায় দেখা যায়: "me/them" মডেলকে স্থির UI স্লটে ম্যাপ করা
+    return {snap.me.user_id: snap.me, snap.peer.user_id: snap.peer}
+
+
+def _drain_events():
+    # কী করছে: listener থ্রেড যা জমা করেছে সব হুক ইভেন্ট নিয়ে activity-কে দেয়; কতটা পেল তা বলে
+    # কেন লাগছে: activity-তে কোনো থ্রেড/লক নেই — তাই শুধু main থ্রেড তাকে ছোঁয় (techspec §3)
+    # real world-এ এটা কোথায় দেখা যায়: producer/consumer queue — I/O থ্রেড জমায়, লুপ থ্রেড প্রক্রিয়া করে
+    count = 0
+    while True:
+        try:
+            event = _events.get_nowait()
+        except queue.Empty:
+            return count
+        _activity.handle(event, wall_now())
+        count += 1
+
+
+def _apply_activity(now):
+    # কী করছে: activity.tick() চালিয়ে নিজের working অবস্থা AppState-এ লেখে (বদল হলে since-ও বসে)
+    # কেন লাগছে: এটাই "হুক → আমার চরিত্র" পথের শেষ ধাপ; Phase 11-এ এখান থেকেই push হবে
+    # real world-এ এটা কোথায় দেখা যায়: ডিটেকশনের ফল একটিই state store-এ লেখা
+    _state.roll_day(now)                       # মধ্যরাত (Dhaka) পেরোলে আজকের কাউন্টার ০
+    if _state.set_working(_activity.tick(now), now):
+        print("WSR: working ->", _state.snapshot(now).me.working)
+
+
 def tick(dt):
-    # কী করছে: প্রতি ~16ms-এ pyglet ঘড়ির দেওয়া dt নিয়ে দুই চরিত্র update করছে
-    # কেন লাগছে: অ্যানিমেশন বাস্তব সময়ের সাথে চলতে হয়; dt দিয়ে গতি frame-rate নিরপেক্ষ থাকে
-    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের update(dt) — প্রতি টিকে সময় এগিয়ে state আপডেট
+    # কী করছে: প্রতি ~16ms-এ হুক ইভেন্ট নেয়, snapshot থেকে দুই চরিত্রের লক্ষ্য বসায় ও update করে
+    # কেন লাগছে: অ্যানিমেশন বাস্তব সময়ের সাথে চলতে হয়; dt দিয়ে গতি frame-rate নিরপেক্ষ থাকে।
+    #           ইভেন্ট এলেই সাথে সাথে working হিসাব করি, তাই প্রম্পট দিলে ~সাথে সাথে ডেস্কে যায়
+    # real world-এ এটা কোথায় দেখা যায়: গেম লুপের update(dt) — প্রতি টিকে ইনপুট নিয়ে state এগোনো
     # নোট: আগে glutTimerFunc নিজেকে আবার schedule করত; pyglet.clock.schedule_interval নিজেই চালায়।
-    #      রিড্র-ও চাইতে হয় না — pyglet প্রতি ফ্রেমে on_draw ডাকে (dt ঘড়ির মাপা বাস্তব সময়)
+    #      রিড্র-ও চাইতে হয় না — pyglet প্রতি ফ্রেমে on_draw ডাকে
+    now = wall_now()
+    if _drain_events():
+        _apply_activity(now)
+    if _show_request.is_set():                 # দ্বিতীয় কপি /show পাঠিয়েছে (listener থ্রেড থেকে)
+        _show_request.clear()
+        _window.set_visible(True)              # উইন্ডো কাজ main থ্রেডেই করতে হয়
+        _window.activate()
+
+    views = _views(_state.snapshot(now))
+    samee.set_working(views["samee"].working, now)   # চরিত্র শুধু লক্ষ্য অনুসরণ করে
+    rifat.set_working(views["rifat"].working, now)
     samee.update(dt)
     rifat.update(dt)
+
+
+def state_tick(dt):
+    # কী করছে: প্রতি সেকেন্ডে activity.tick() চালায় — idle timeout ও stale cap এখানেই কাজ করে
+    # কেন লাগছে: কোনো ইভেন্ট না এলেও সময় পেরোলে working নিজে থেকে False হতে হবে (appflow §5)
+    # real world-এ এটা কোথায় দেখা যায়: periodic reaper/expiry টাস্ক
+    _apply_activity(wall_now())
 
 
 def request_close():
@@ -309,39 +395,35 @@ def on_close():
     return EVENT_HANDLED
 
 
+def _inject(event_name):
+    # কী করছে: --dev মোডে একটি নকল হুক ইভেন্ট আসল পথেই (queue → activity) ঢেলে দেয়
+    # কেন লাগছে: Claude Code না খুলেই ডিটেকশনের পথ পরীক্ষা করতে; --dev ছাড়া কী 1/2 নিষ্ক্রিয় (§4.5)
+    # real world-এ এটা কোথায় দেখা যায়: ডেভ বিল্ডে "simulate event" শর্টকাট
+    if not _dev:
+        return
+    _events.put({"hook_event_name": event_name, "session_id": config.DEV_SESSION_ID})
+    print("WSR: dev inject", event_name)
+
+
 def on_key_press(symbol, modifiers):
-    # কী করছে: ESC → বন্ধ; '1'/'2' → Samee/Rifat টগল; 'D' → ডিবাগ overlay, 'G' → শুধু গ্রিড টগল
-    # কেন লাগছে: টগল শুধু লক্ষ্য বদলায় (animation মেলায়); D/G দিয়ে ক্লিপিং/পথ চোখে দেখানো (viva)
-    # real world-এ এটা কোথায় দেখা যায়: ডেমো কী দিয়ে target state ও ডিবাগ view পাল্টানো
+    # কী করছে: ESC → বন্ধ; '1'/'2' → (--dev হলে) নকল prompt / session end; 'D' → ডিবাগ overlay,
+    #           'G' → শুধু গ্রিড টগল
+    # কেন লাগছে: ম্যানুয়াল টগল আর নেই — status এখন হুক থেকে আসে; D/G দিয়ে ক্লিপিং/পথ চোখে দেখানো
+    # real world-এ এটা কোথায় দেখা যায়: ডিবাগ কী ও ডেভ-মোড ইভেন্ট ইনজেকশন
     # নোট: ESC-ও request_close() দিয়েই যায় (pyglet-এর ডিফল্ট ESC হ্যান্ডলার নয়), তাই
     #      Phase 13-এ X ও ESC একসাথে "hide to tray" হবে (appflow §13)
     global _debug, _grid
     if symbol == pyglet_key.ESCAPE:
         request_close()
     elif symbol in (pyglet_key._1, pyglet_key.NUM_1):
-        samee.set_working(not samee.target_working, wall_now())
+        _inject("UserPromptSubmit")      # --dev ছাড়া কিছুই হয় না
     elif symbol in (pyglet_key._2, pyglet_key.NUM_2):
-        rifat.set_working(not rifat.target_working, wall_now())
+        _inject("SessionEnd")
     elif symbol == pyglet_key.D:
         _debug = not _debug       # পুরো ডিবাগ overlay (গ্রিডও দেখায়)
     elif symbol == pyglet_key.G:
         _grid = not _grid         # শুধু গ্রিড লাইন
     return EVENT_HANDLED
-
-
-def on_mouse_press(mx, my, button, modifiers):
-    # কী করছে: বাঁ-বোতাম চাপলে মাউস অবস্থানকে গ্রিডে বদলে টগল বাক্সে পড়েছে কিনা দেখে; পড়লে
-    #           --me ব্যবহারকারীর status টগল করে (কী 1/2-এর মতোই set_working)
-    # কেন লাগছে: প্যানেলের টগলে ক্লিক করে নিজের কাজের অবস্থা বদলানোর ইনপুট (design §9 / appflow §5)
-    # real world-এ এটা কোথায় দেখা যায়: UI-তে বাটন ক্লিক → hit-test → action
-    # নোট: pyglet-এর মাউস y নিচ-থেকে বাড়ে, GLUT-এর ছিল উপর-থেকে — তাই উচ্চতা থেকে বিয়োগ করে
-    #      screen_to_grid-এর top-down হিসাবে ফেরাই
-    if button != pyglet_mouse.LEFT:
-        return                                            # শুধু বাঁ-বোতাম (মাঝ/ডান নয়)
-    gx, gy = panel.screen_to_grid(mx, _window.height - my)
-    if panel.toggle_hit(gx, gy):
-        me = samee if _me == "samee" else rifat
-        me.set_working(not me.target_working, wall_now())
 
 
 def make_window():
@@ -358,28 +440,53 @@ def make_window():
         config=gl_config,
     )
     # হ্যান্ডলার সরাসরি বসাই — pyglet-এর ডিফল্ট on_close/on_key_press যেন না চলে
+    # মাউস হ্যান্ডলার আর নেই: টগল বাদ (Phase 10), আর dibs বাটন আসবে Phase 14-এ
     win.on_draw = display
     win.on_close = on_close
     win.on_key_press = on_key_press
-    win.on_mouse_press = on_mouse_press
     return win
 
 
 def main():
-    # কী করছে: আর্গুমেন্ট পড়ে pyglet উইন্ডো খোলে, init_scene() ডাকে, টিক schedule করে ও মেইন লুপে ঢোকে
-    # কেন লাগছে: এটাই অ্যাপের শুরু — উইন্ডো, প্রজেকশন, display list ও ইনপুট হ্যান্ডলার সেট করে সব চালু করে
+    # কী করছে: আর্গুমেন্ট পড়ে পোর্ট দখল করে (একটাই কপি), listener চালু করে, উইন্ডো খোলে,
+    #           দুটি টিক schedule করে ও মেইন লুপে ঢোকে; শেষে listener বন্ধ করে
+    # কেন লাগছে: appflow §2-এর স্টার্টআপ ক্রম — bind → state → থ্রেড → উইন্ডো → লুপ
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
     args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
-    global _me, _window
-    _me = args.me        # প্যানেল টগল ও মাউস ক্লিক এই ব্যবহারকারীকে নিয়ন্ত্রণ করবে
+    global _me, _window, _state, _activity, _listener, _dev
+    _me = args.me        # আমার হুক এই জনের status চালায়; অন্যজন সঙ্গী (peer)
+    _dev = args.dev
+    peer = "rifat" if _me == "samee" else "samee"
+    port = config.LISTEN_PORT if args.port is None else args.port
+    idle = config.IDLE_TIMEOUT if args.idle is None else args.idle
+
+    _state = state.AppState(_me, peer, wall_now())
+    _activity = activity.Activity(idle_timeout=idle)
+    _listener = listener.Listener(on_event=_events.put, on_show=_show_request.set,
+                                 port=port)
+
+    if not _listener.try_bind():          # পোর্ট দখল = আরেকটি কপি চলছে (appflow §2)
+        if listener.ping_show(port=port):
+            print("Work•Sleep•Repeat is already running — showed its window.")
+            return 0
+        print("Port %d is busy but did not answer — is another app using it?" % port)
+        return 1
+    _listener.start()
+    print("WSR: listening on http://%s:%d  (idle timeout %ds%s)"
+          % (config.LISTEN_HOST, port, idle, ", dev mode" if _dev else ""))
 
     _window = make_window()                           # উইন্ডো + GL কনটেক্সট (এখন GLUT নয়, pyglet)
     init_scene(*_window.get_framebuffer_size())       # প্রজেকশন/blending + display list তৈরি
 
-    pyglet.clock.schedule_interval(tick, TICK_SECONDS)   # ~60 FPS টিক (আগের glutTimerFunc)
+    pyglet.clock.schedule_interval(tick, TICK_SECONDS)                    # ~60 FPS অ্যানিমেশন টিক
+    pyglet.clock.schedule_interval(state_tick, config.STATE_TICK_SECONDS)  # প্রতি সেকেন্ডে ডিটেকশন
 
-    pyglet.app.run()                                  # ইভেন্ট লুপ; ESC/X না চাপা পর্যন্ত চলবে
+    try:
+        pyglet.app.run()                              # ইভেন্ট লুপ; ESC/X না চাপা পর্যন্ত চলবে
+    finally:
+        _listener.stop()                              # পোর্ট ছেড়ে দিই, যাতে পরের কপি bind করতে পারে
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

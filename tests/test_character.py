@@ -151,6 +151,14 @@ def test_huge_dt_clamped():
     check("huge dt advances <= DT_CLAMP worth", advanced <= expected_max)
 
 
+def test_no_check_failures():
+    # কী করছে: উপরের সব check() পাশ করেছে কিনা তা assert করে
+    # কেন লাগছে: pytest শুধু exception দেখে; check() ছাপায় কিন্তু raise করে না — তাই এই টেস্টটি
+    #           না থাকলে উপরের ব্যর্থতা pytest-এ সবুজ দেখাত (ফাইল-ক্রমে এটি সবার শেষে চলে)
+    # real world-এ এটা কোথায় দেখা যায়: soft assertion সংগ্রহ করে শেষে এক জায়গায় ফেল করা
+    assert not _fails
+
+
 if __name__ == "__main__":
     test_full_cycle_order()
     test_devices_order_and_only_seated()

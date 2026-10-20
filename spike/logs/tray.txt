@@ -1,0 +1,13 @@
+[01:59:09] === GLUT + pystray spike start ===
+[01:59:09] Entering glutMainLoop(). Use the tray menu and the X button now.
+[01:59:09] Tray icon starting (run on tray thread).
+[01:59:38] TRAY menu: Hide -> enqueue 'hide'
+[01:59:38] GLUT thread handling command: hide
+[01:59:45] TRAY menu: Show -> enqueue 'show'
+[01:59:45] GLUT thread handling command: show
+[01:59:52] TRAY menu: Toast -> icon.notify()
+[01:59:52] icon.notify() returned without error.
+[02:00:14] CLOSE callback fired (X button). Attempting glutHideWindow().
+[02:00:14] glutHideWindow() returned — if the process is still alive and the tray icon remains, X=hide works.
+[02:00:14] glutMainLoop() returned (GLUT_ACTION_CONTINUE_EXECUTION path, or quit).
+[02:00:14] === spike end ===

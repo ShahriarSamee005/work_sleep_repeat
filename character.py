@@ -1,5 +1,3 @@
-"""character.py — ক্যারেক্টারের state machine ও drawing (ঘুম → ওঠা → হাঁটা → বসা → কাজ ও উল্টো)।"""
-
 import math
 import time
 
@@ -11,7 +9,6 @@ from pixel import draw_pixel, draw_rect, draw_sprite
 
 import config
 
-# ---- ৮টি state (appflow §3) ----
 IN_BED = "IN_BED"
 GETTING_UP = "GETTING_UP"
 WALKING_TO_DESK = "WALKING_TO_DESK"
@@ -56,8 +53,6 @@ def draw_sitting(time_now):
 
 
 class Character:
-    """একজন ব্যক্তির state machine ও drawing (techspec §4.6)।"""
-
     def __init__(self, name):
         # কী করছে: একটি ক্যারেক্টার তৈরি করছে, শুরুতে বিছানায় ঘুমন্ত অবস্থায়
         # কেন লাগছে: Samee ও Rifat দুজনের জন্য আলাদা অবজেক্ট; সব per-user state এখানে থাকে

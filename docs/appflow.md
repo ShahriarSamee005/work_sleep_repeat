@@ -1,164 +1,177 @@
-# Work•Sleep•Repeat — App Flow
+# Work•Sleep•Repeat — App Flow (v2)
 
-This file explains what happens, step by step, from starting the app to a toggle appearing on the other person's screen.
+> How the app behaves, step by step, from install to daily use. Contracts referenced here live in `techspec.md`.
 
-## 1. Startup
+---
 
-```mermaid
-flowchart TD
-    A[python main.py --me rifat] --> B{--me valid?}
-    B -- no --> X[Print usage and exit]
-    B -- yes --> C[Load config.py and .env]
-    C --> D{Keys found and not --offline?}
-    D -- yes --> E[sync.start: background polling thread]
-    D -- no --> F[Offline mode]
-    E --> G[glutInit, create 1440x576 window]
-    F --> G
-    G --> H[gluOrtho2D 0,240,96,0 and enable blending]
-    H --> I[room.build_room_lists: cache static rooms]
-    I --> J[Create 2 Characters: Samee, Rifat, both IN_BED]
-    J --> K[Register display, timer, keyboard, mouse]
-    K --> L[glutMainLoop]
-```
-
-## 2. The main loop (every ~16 ms)
+## 1. First install
 
 ```mermaid
 flowchart TD
-    T[tick] --> A[dt = now - last_time]
-    A --> B[state = sync.get_state or local state]
-    B --> C[samee.set_working state.samee.working]
-    C --> D[rifat.set_working state.rifat.working]
-    D --> E[samee.update dt, rifat.update dt]
-    E --> F[glutPostRedisplay]
-    F --> G[glutTimerFunc 16, tick]
-    F --> H[display: draw everything]
+  A[Unzip / run WorkSleepRepeat.exe] --> B{config.json exists?}
+  B -- no --> C[First-run dialog]
+  C --> D[Pick Rifat / Samee, paste Supabase URL + key]
+  D --> E[Test connection → wsr_get_state]
+  E -- fails --> D
+  E -- ok --> F{Connect to Claude Code?}
+  F -- yes --> G[Backup settings.json → merge hooks]
+  G --> J[Save config.json]
+  F -- no --> J
+  J --> K{Start with Windows?}
+  K -- yes --> L[Write HKCU Run key with --tray]
+  K -- no --> M
+  L --> M[Start app normally]
+  B -- yes --> M
 ```
 
-**Key idea:** the sync state says what *should* happen. The character's state machine decides *how* to get there with animation. The two never fight each other.
+After setup, the user must **restart any open Claude Code sessions** so they load the new hooks. The dialog says so.
 
-## 3. Character state machine
+---
 
-```mermaid
-stateDiagram-v2
-    [*] --> IN_BED
-    IN_BED --> GETTING_UP: target = working
-    GETTING_UP --> WALKING_TO_DESK: after 0.3 s
-    WALKING_TO_DESK --> SITTING_DOWN: Bezier t reaches 1
-    SITTING_DOWN --> WORKING: after 0.3 s, then monitor on, then lamp on
-    WORKING --> STANDING_UP: target = sleeping (lamp off, monitor off first)
-    STANDING_UP --> WALKING_TO_BED: after 0.3 s
-    WALKING_TO_BED --> LYING_DOWN: Bezier t reaches 0
-    LYING_DOWN --> IN_BED: after 0.3 s, blanket becomes neat
+## 2. App startup (every time)
 
-    WALKING_TO_DESK --> WALKING_TO_BED: target flips (progress = 1 - progress)
-    WALKING_TO_BED --> WALKING_TO_DESK: target flips (progress = 1 - progress)
-```
+1. Parse args (`--me`, `--tray`, `--offline`, `--dev`, `--setup`).
+2. Try to bind `127.0.0.1:47821`.
+   - Taken → `POST /show` to the running copy → exit. (One copy only.)
+3. Load config. Build `AppState`.
+4. Start threads: listener, sync (unless `--offline`), tray.
+5. Sync thread first call: read own row. Resume `today_seconds` if `today_date` is today (Dhaka).
+6. Create the pyglet window. If `--tray`, hide it straight away.
+7. Main loop: each frame → `snapshot()` → character / lighting / panel draw. Once per second → `activity.tick()`, `alerts.check()`, time counter.
 
-What's on screen in each state:
+---
 
-| State | Sprite | Bed | Monitor | Lamp |
-|---|---|---|---|---|
-| `IN_BED` | head on pillow | neat | off | off |
-| `GETTING_UP` | standing beside bed | messy | off | off |
-| `WALKING_TO_DESK` | walk frames on the curve | messy | off | off |
-| `SITTING_DOWN` | sitting (with squash) | messy | off | off |
-| `WORKING` | sitting + typing | messy | on (after 0.3 s) | on (after 0.6 s) |
-| `STANDING_UP` | standing at chair | messy | off | off |
-| `WALKING_TO_BED` | walk frames, curve reversed | messy | off | off |
-| `LYING_DOWN` | standing beside bed | messy | off | off |
-
-States like `GETTING_UP` and `SITTING_DOWN` can't be interrupted. They are short (0.3 s), and the new target is applied once they finish.
-
-## 4. Toggle flow (the full journey)
-
-When Rifat clicks the toggle:
-
-```mermaid
-sequenceDiagram
-    participant R as Rifat's app
-    participant DB as Supabase
-    participant S as Samee's app
-
-    R->>R: mouse click → toggle_hit is true
-    R->>R: sync.set_my_status(true): local state updated now
-    R->>R: next tick: Rifat's character starts GETTING_UP
-    R-)DB: PATCH status id=rifat {working: true, since: now} (background)
-    loop every 1.5 s
-        S->>DB: GET status (background thread)
-        DB-->>S: rifat.working = true
-    end
-    S->>S: next tick: Rifat's character starts GETTING_UP on Samee's screen too
-```
-
-- Rifat sees his own change **instantly**, because the local update comes first.
-- Samee sees it within **about 1.5–3 s**, depending on the poll timing.
-
-## 5. Input map
-
-| Input | Online mode | Offline mode |
-|---|---|---|
-| Click toggle | toggles **my** status and syncs it | toggles my status locally |
-| `1` | toggles Samee locally (demo only, not synced) | toggles Samee |
-| `2` | toggles Rifat locally (demo only, not synced) | toggles Rifat |
-| `D` | debug overlay on/off | same |
-| `G` | grid lines on/off | same |
-| `ESC` | quit | same |
-
-In online mode, a remote update overrides a local `1`/`2` change on the next poll. This is expected, since keys are for demos.
-
-## 6. Time tracking flow
-
-```mermaid
-flowchart TD
-    A[Toggle ON] --> B[since = now]
-    B --> C[Panel shows today_seconds + now - since, updates every frame]
-    C --> D[Toggle OFF]
-    D --> E[today_seconds += now - since]
-    E --> F[since = null]
-    G[App start or poll] --> H{day != today in Asia/Dhaka?}
-    H -- yes --> I[Treat today_seconds as 0, save new day on next write]
-    H -- no --> C
-```
-
-## 7. Conflict flow (both working)
-
-```mermaid
-flowchart TD
-    A[tick] --> B{samee.working AND rifat.working?}
-    B -- no --> C[Normal panel and lamps]
-    B -- yes --> D[Status: Both working! in red]
-    D --> E[Both lamp shades blink red every 0.5 s]
-```
-
-This warns about exactly the problem the app exists to prevent.
-
-## 8. Draw order per frame
+## 3. Daily use: Rifat starts working
 
 ```
-1. Clear screen
-2. Samee's room (translate only)
-   a. static room display list (neat or messy)
-   b. screen + lamp shade (dynamic)
-   c. character
-   d. darkness → glow → rays → screen glow
-   e. emissive parts (screen, lamp shade, bulb) redrawn on top
-3. Rifat's room (translate + reflect), same steps
-4. Divider and outer frame
-5. Name labels (not mirrored)
-6. Panel
-7. Debug overlay (if on)
-8. Swap buffers
+Rifat types a prompt in Claude Code
+  → UserPromptSubmit hook → curl POST /hook
+  → listener → activity.handle() → session.turn_active = true
+  → AppState.me.working = true, since = now → outbox: status
+  → Rifat's room: character gets up, walks, sits (existing animation)
+  → sync thread (≤ 2 s) → wsr_update_status('rifat', {working:true, since})
+Samee's app
+  → next poll (≤ 2 s) → sees rifat.working = true
+  → Rifat's room on Samee's screen animates to desk
+  → tray icon: lit lamp · tooltip "Rifat is working"
 ```
 
-## 9. Offline / failure flow
+End-to-end target: under 3 s on both screens (PRD FR1).
 
-```mermaid
-flowchart TD
-    A[Poll or PATCH fails] --> B[Keep last good state]
-    B --> C[Panel shows offline]
-    C --> D[Keys and toggle still work locally]
-    D --> E{Next poll succeeds?}
-    E -- yes --> F[Back online, remote state wins]
-    E -- no --> C
+## 4. Long autonomous run
+
 ```
+One prompt → Claude works for 25 min using tools
+  UserPromptSubmit → turn_active = true
+  PostToolUse (many) → last_event keeps updating
+  Stop → turn_active = false
+  → still "working" for IDLE_TIMEOUT (10 min) after Stop, in case Rifat reads and replies
+```
+
+## 5. Rifat stops
+
+```
+Either: no Claude Code event for 10 min (and no turn active)
+Or:     all sessions ended (SessionEnd for each)
+  → activity.tick() → working = false → outbox: status
+  → Rifat's character walks back to bed
+Samee's app next poll
+  → rifat.working true → false
+  → alerts: "Claude is free — Rifat just finished."
+     (or "Your turn" if Samee had called dibs)
+```
+
+## 6. Crash safety
+
+```
+Claude Code window killed mid-turn → no Stop, no SessionEnd
+  → turn_active stays true
+  → after TURN_STALE_CAP (30 min) with no event, tick() drops the session
+  → working = false
+```
+
+---
+
+## 7. Usage numbers — ⛔ DROPPED (2026-10-20)
+
+The 5h/weekly usage feature is not built. The status line never runs on VS Code/desktop, so there's no live source. `/statusline` just returns 204 and is ignored. No usage bars, no split, no limit alerts. Flow kept out of scope; see tracker.
+
+---
+
+## 8. Call dibs
+
+```
+Samee working. Rifat clicks [Call dibs] (panel or tray)
+  → me.wants_next = true, wants_next_at = now → push
+Samee's app
+  → sees rifat.wants_next false → true
+  → toast "Rifat wants it next" + bubble over Rifat's character
+Samee stops → Rifat gets "Your turn"
+Rifat starts working → Rifat's wants_next auto-clears
+(or Rifat cancels, or 2 h passes → auto-clear)
+```
+
+Dibs button only shows while the other person is working.
+
+---
+
+## 9. Both working (conflict)
+
+```
+Both working for > 30 s
+  → panel: "Both of you are on it!" + blinking lamps (existing)
+  → toast once per overlap: "You're both on it"
+```
+
+---
+
+## 10. Network problems
+
+```
+Poll fails twice → connected = false
+  → panel bottom line "offline — retrying", tray icon grey
+  → own detection keeps working locally, outbox keeps latest status
+  → backoff 2 → 4 → 8 → 16 → 30 s
+Poll succeeds → flush outbox → connected = true → normal 2 s polling
+```
+
+Peer PC off → peer heartbeat older than 60 s → "Samee is offline", darker room, grey dot.
+
+## 11. PC sleep / wake
+
+```
+Wake → sync loop sees time jump > 30 s
+  → immediate reconnect + full re-push of own status
+  → activity.tick() drops sessions older than the caps
+  → midnight passed while asleep? clock.py resets today_seconds
+```
+
+## 12. Midnight (Asia/Dhaka)
+
+```
+00:00 → today_seconds = 0, today_date = new date → push
+(no history kept — by design)
+```
+
+---
+
+## 13. Window and tray
+
+| Action | Result |
+|---|---|
+| Click tray icon / "Open rooms" | show window, bring to front |
+| Window close button (X) | hide window, app keeps running in tray |
+| `ESC` | hide window (same as X) |
+| Tray → Quit | stop threads, push `working=false`? **No** — push nothing; status stays truthful because hooks stop and peer sees heartbeat go stale → "offline" |
+| Start at login (`--tray`) | runs hidden, only tray icon |
+
+## 14. Remove / reinstall Claude Code integration
+
+Tray → Claude Code integration →
+- **Remove hooks**: backup → remove only our hook entries (matching `127.0.0.1:47821`). No status line was installed.
+- **Reinstall hooks**: same as setup step G/H.
+
+## 15. Dev mode (`--dev`)
+
+- Keys `1` / `2`: inject fake prompt / fake session end for *me* into the activity engine.
+- `D` debug view, `G` grid (unchanged). FPS shown only in debug view.

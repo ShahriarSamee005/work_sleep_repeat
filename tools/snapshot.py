@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw
 import character as C
 import config
 import main as app
+import state
 
 W, H = config.WINDOW_W, config.WINDOW_H
 _window = None               # pyglet উইন্ডো (_setup_context তৈরি করে)
@@ -63,6 +64,22 @@ def _grab():
     return Image.frombytes("RGB", (W, H), bytes(data)).transpose(Image.FLIP_TOP_BOTTOM)
 
 
+def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_worked=0.0):
+    # কী করছে: deterministic একটি AppState বানিয়ে app._state-এ বসায় — নিজের since পিছিয়ে দিয়ে
+    #           কার্ডে ঠিক "worked" সময় দেখায়, সঙ্গীর মান সরাসরি সেট করে
+    # কেন লাগছে: Phase 10 থেকে প্যানেল state.snapshot() পড়ে (techspec §7), চরিত্রের কাউন্টার নয়
+    # real world-এ এটা কোথায় দেখা যায়: UI টেস্টে fixture state ইনজেক্ট করা
+    peer = "rifat" if me == "samee" else "samee"
+    both = {"samee": (samee_work, samee_worked), "rifat": (rifat_work, rifat_worked)}
+    st = state.AppState(me, peer, FAKE_NOW)
+    my_working, my_worked = both[me]
+    if my_working:
+        st.set_working(True, FAKE_NOW - my_worked)    # now = FAKE_NOW → কার্ডে worked সেকেন্ড
+    peer_working, peer_worked = both[peer]
+    st.set_peer(working=peer_working, today_seconds=int(peer_worked))
+    app._state = st
+
+
 def _settle(samee_work, rifat_work, seconds=4.0):
     # কী করছে: দুই চরিত্রের target সেট করে যথেষ্ট সময় সিমুলেট করে থিতু (settled) অবস্থায় নেয়
     # কেন লাগছে: --samee work দিলে বসা + device চালু থিতু অবস্থার ছবি চাই (মাঝপথের নয়)
@@ -83,15 +100,9 @@ def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_work
     app._fake_wall = FAKE_NOW                       # সময় ফ্রিজ — context warm-up-এর display()-ও
                                                     # যেন FAKE_NOW-এই দিন সেট করে (নাহলে দিন mismatch-এ
                                                     # মধ্যরাত রিসেট since মুছে দেয়)
+    _fake_state(me, samee == "work", rifat == "work", samee_worked, rifat_worked)
     _setup_context()
     _settle(samee == "work", rifat == "work")
-    # কাজ-করা চরিত্রের since পিছিয়ে সেট করে কার্ডে নির্দিষ্ট সময় দেখাই (worked সেকেন্ড)
-    if samee == "work":
-        app.samee.today_seconds = 0.0
-        app.samee.since = FAKE_NOW - samee_worked
-    if rifat == "work":
-        app.rifat.today_seconds = 0.0
-        app.rifat.since = FAKE_NOW - rifat_worked
     app._fake_time = t
     _grab().save(out)
     print("wrote", os.path.abspath(out))
@@ -102,6 +113,8 @@ def render_sheet(out, toggle_user, frames, start_work=False):
     #           toggle_user-এর রুমের টাইল বানিয়ে কন্টাক্ট শিট বানায়
     # কেন লাগছে: এক নজরে ওঠা→হাঁটা→বসা→device-অন (বা উল্টো) ক্রম পাশাপাশি দেখাতে; Rifat হলে পথ mirrored
     # real world-এ এটা কোথায় দেখা যায়: অ্যানিমেশনের contact sheet / frame strip
+    # নোট: শিট শুধু একটি রুম crop করে (প্যানেল বাদ), তাই state নিরপেক্ষ রাখলেই চলে
+    _fake_state(toggle_user)
     _setup_context()
     app.samee = C.Character("samee")     # তাজা অবস্থা (দুজনেই IN_BED)
     app.rifat = C.Character("rifat")

@@ -1,11 +1,9 @@
-"""algorithms.py — হাতে লেখা CG অ্যালগরিদম: Bresenham, cubic Bezier, boundary fill, scanline circle, Cohen-Sutherland।
-
-কোনো লাইব্রেরি এই অ্যালগরিদমগুলো করে দেয় না — সব হাতে লেখা (কোর্সের শর্ত ও viva-র মূল অংশ)।
+"""Bresenham, cubic Bezier, boundary fill, scanline circle, Cohen-Sutherland।
 """
 
 import math
 
-# Cohen-Sutherland region code-এর নামযুক্ত বিট (design/techspec §4.3)।
+# Cohen-Sutherland region code-এর নামযুক্ত বিট 
 # আমাদের গ্রিডে y নিচের দিকে বাড়ে, তাই "TOP" মানে ছোট y (উপরে), "BOTTOM" মানে বড় y (নিচে)।
 INSIDE = 0   # 0000 — রেক্টের ভেতরে
 LEFT = 1     # 0001 — বাঁ সীমার বাইরে (x < xmin)
@@ -15,11 +13,11 @@ TOP = 8      # 1000 — উপরের সীমার বাইরে (y < ymi
 
 
 def bresenham_line(x0, y0, x1, y1):
-    # কী করছে: (x0,y0) থেকে (x1,y1) পর্যন্ত সরল রেখার পিক্সেল ঘরগুলোর তালিকা বের করছে (integer গণিতে)
+    # কী করছে: (x0,y0) থেকে (x1,y1) পর্যন্ত সরল রেখার পিক্সেল ঘরগুলোর তালিকা বের করছে (integer)
     # কেন লাগছে: গ্রিডে রেখা আঁকতে কোন কোন ঘর রঙ করতে হবে জানা দরকার; float ছাড়া দ্রুত ও নিখুঁত
     # real world-এ এটা কোথায় দেখা যায়: GPU/প্রিন্টার/Google Maps রাস্টারাইজেশনে রেখা→পিক্সেল
     points = []
-    dx = abs(x1 - x0)              # অনুভূমিক দূরত্ব (ধনাত্মক)
+    dx = abs(x1 - x0)             # অনুভূমিক দূরত্ব (ধনাত্মক)
     dy = abs(y1 - y0)             # উল্লম্ব দূরত্ব (ধনাত্মক)
     sx = 1 if x0 < x1 else -1     # x কোন দিকে এগোবে (+1 ডানে, -1 বাঁয়ে)
     sy = 1 if y0 < y1 else -1     # y কোন দিকে এগোবে (+1 নিচে, -1 উপরে)
@@ -33,7 +31,7 @@ def bresenham_line(x0, y0, x1, y1):
         if e2 > -dy:              # x-এ এক ধাপ নেওয়ার সময় হয়েছে?
             err -= dy
             x += sx
-        if e2 < dx:              # y-তে এক ধাপ নেওয়ার সময় হয়েছে?
+        if e2 < dx:               # y-তে এক ধাপ নেওয়ার সময় হয়েছে?
             err += dx
             y += sy
     return points
@@ -155,9 +153,7 @@ def cohen_sutherland(x0, y0, x1, y1, rect):
             out1 = compute_outcode(x1, y1, rect)
 
 
-# =========================================================================
-# স্ব-পরীক্ষা (self-test): `python algorithms.py` চালালে প্রতিটি অ্যালগরিদমের PASS/FAIL ছাপে
-# =========================================================================
+# By running`python algorithms.py' we can check if the algorithm pass or fails
 
 def _check(name, condition):
     # কী করছে: একটি শর্ত সত্য হলে PASS, নাহলে FAIL ছাপে ও গণনা রাখে

@@ -1,8 +1,5 @@
-# Algorithms Explained — viva prep
+# Algorithms Explained 
 
-Every algorithm in `algorithms.py` is written by hand (no library does the algorithm). This file
-explains each one in plain English: what it does, where we use it, the code line-by-line, what
-breaks if you delete a key line, and one likely viva question.
 
 Coordinate reminder: our grid is `gluOrtho2D(0, 240, 96, 0)`, so **y grows downward** (y=0 is the top).
 

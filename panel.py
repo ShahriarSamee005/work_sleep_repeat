@@ -28,14 +28,6 @@ def screen_to_grid(mx, my):
     return (mx / config.PIXEL, my / config.PIXEL)
 
 
-def toggle_hit(gx, gy):
-    # কী করছে: গ্রিড বিন্দু (gx,gy) টগল বাক্সের ভেতরে কিনা বলে (True/False)
-    # কেন লাগছে: টগলে ক্লিক হয়েছে কিনা জানতে; হলে --me ব্যবহারকারীর status বদলাবে
-    # real world-এ এটা কোথায় দেখা যায়: বাটনে ক্লিক ভেতরে পড়েছে কিনা যাচাই (bounding box test)
-    x, y, w, h = config.TOGGLE_BOX
-    return x <= gx < x + w and y <= gy < y + h
-
-
 def _draw_centered(cx, y, text, color):
     # কী করছে: cx-কে কেন্দ্র ধরে text-এর প্রস্থ মেপে গ্রিড এককে বাঁয়ে সরিয়ে আঁকে
     # কেন লাগছে: প্যানেলের লেখাগুলো ৪৮-পিক্সেল কলামে মাঝ বরাবর বসাতে
@@ -57,19 +49,6 @@ def _draw_icon(any_working):
         draw_sprite(*config.PANEL_ICON_POS, sprites.MOON, sprites.MOON_COLORS)
 
 
-def _draw_toggle(on):
-    # কী করছে: টগল বাক্স আঁকে — on হলে ACCENT + knob ডানে, off হলে TOGGLE_OFF + knob বাঁয়ে
-    # কেন লাগছে: --me ব্যবহারকারীর target_working চোখে দেখাতে ও ক্লিকযোগ্য কন্ট্রোল দিতে
-    # real world-এ এটা কোথায় দেখা যায়: মোবাইল সেটিংসের on/off toggle switch
-    x, y, w, h = config.TOGGLE_BOX
-    track = config.ACCENT if on else config.TOGGLE_OFF
-    draw_box(x, y, w, h, track)                        # বাক্স (track) + OUTLINE বর্ডার
-    kw = config.TOGGLE_KNOB_W
-    pad = config.TOGGLE_KNOB_PAD
-    knob_x = (x + w - pad - kw) if on else (x + pad)   # on → ডানে, off → বাঁয়ে
-    draw_box(knob_x, y + pad, kw, h - 2 * pad, config.TEXT)   # হালকা রঙের knob
-
-
 def _draw_card(box, name, active, seconds):
     # কী করছে: এক টাইম কার্ড আঁকে — active হলে PANEL_CARD_ACTIVE + ACCENT বর্ডার, নাহলে PANEL_CARD;
     #           উপরে "Name · today", নিচে format_time (active হলে GOLD)
@@ -87,11 +66,13 @@ def _draw_card(box, name, active, seconds):
 
 
 def draw_panel(state, me, now):
-    # কী করছে: পুরো প্যানেল আঁকে — ব্যাকগ্রাউন্ড, আইকন, শিরোনাম, স্ট্যাটাস/সাব-স্ট্যাটাস, টগল+লেবেল, দুই কার্ড
-    # কেন লাগছে: এটাই ডান পাশের UI; কে কাজ করছে, কত সময়, এবং --me নিজের status বদলানোর কন্ট্রোল
+    # কী করছে: পুরো প্যানেল আঁকে — ব্যাকগ্রাউন্ড, আইকন, শিরোনাম, স্ট্যাটাস/সাব-স্ট্যাটাস, দুই কার্ড
+    # কেন লাগছে: এটাই ডান পাশের UI; কে কাজ করছে আর আজ কত সময় হয়েছে তা দেখায়
     # real world-এ এটা কোথায় দেখা যায়: অ্যাপের side panel / status HUD
-    # state = {"samee": {...}, "rifat": {...}} প্রতিজনে "working" (bool) ও "seconds" (float)
-    # now: Phase 9 sync-এর জন্য সংরক্ষিত (এখন seconds আগেই হিসাব করে state-এ দেওয়া)
+    # state = {"samee": {...}, "rifat": {...}} প্রতিজনে "working" (bool) ও "seconds" (float);
+    #         main প্রতি ফ্রেমে state.snapshot() থেকে এটি বানায় (techspec §7)
+    # me: এখন শুধু Phase 14-এর dibs বাটন ও §2.1-এর "You're working" লেখার জন্য রাখা
+    # now: Phase 11 sync-এর জন্য সংরক্ষিত (এখন seconds আগেই হিসাব করে state-এ দেওয়া)
     samee_w = state["samee"]["working"]
     rifat_w = state["rifat"]["working"]
     any_w = samee_w or rifat_w
@@ -120,11 +101,8 @@ def draw_panel(state, me, now):
     sub = "Ask before you start" if any_w else "Nobody is working"
     _draw_centered(config.PANEL_CENTER_X, config.PANEL_SUB_Y, sub, config.TEXT_DIM)
 
-    # টগল (—me ব্যবহারকারীর target) + লেবেল
-    my_working = state[me]["working"]
-    _draw_toggle(my_working)
-    _draw_centered(config.PANEL_CENTER_X, config.TOGGLE_LABEL_Y,
-                   "Working" if my_working else "Sleeping", config.TEXT)
+    # টগলের জায়গা (y 44–60) এখন ফাঁকা — টগল বাদ, কারণ status এখন হুক থেকে আসে (design §2)।
+    # Phase 14-এ এখানেই "Call dibs" বাটন বসবে; তাই config-এর TOGGLE_* মাপগুলো রেখে দেওয়া হলো।
 
     # দুই টাইম কার্ড
     _draw_card(config.CARD1_BOX, "Samee", samee_w, state["samee"]["seconds"])

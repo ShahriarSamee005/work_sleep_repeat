@@ -1,0 +1,8 @@
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
+/bin/bash.exe|/usr/bin/bash|/mingw64/bin/curl
