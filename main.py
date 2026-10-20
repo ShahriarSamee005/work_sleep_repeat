@@ -40,7 +40,9 @@ import listener
 import panel
 import room
 import state
-from pixel import draw_rect, draw_text, hex_to_rgb, text_width
+import sync
+import userconfig
+from pixel import draw_box, draw_rect, draw_text, hex_to_rgb, text_width
 
 TICK_SECONDS = 1.0 / 60.0         # অ্যানিমেশন টিকের ব্যবধান (আগের glutTimerFunc-এর ১৬ms)
 LABEL_FONT = font.BITMAP_9X15     # নাম লেবেলের ফন্ট
@@ -68,6 +70,8 @@ _me = "samee"
 _state = None        # state.AppState — working/since/today_seconds-এর একমাত্র সত্য
 _activity = None     # activity.Activity — হুক ইভেন্ট → working (pure logic)
 _listener = None     # listener.Listener — 127.0.0.1:47821
+_sync = None         # sync.Sync — Supabase push/poll থ্রেড (--offline হলে None)
+_last_push = 0.0     # সর্বশেষ কখন নিজের status আউটবক্সে দিয়েছি (প্রতি ৬০s পুশের হিসাব)
 _events = queue.Queue()   # listener থ্রেড ভরে, main থ্রেড খালি করে (activity একাই main-এ চলে)
 _show_request = threading.Event()   # দ্বিতীয় কপির POST /show — main থ্রেডে উইন্ডো দেখাতে
 _dev = False         # --dev: কী 1/2 নকল ইভেন্ট ঢালে
@@ -167,7 +171,7 @@ def init_scene(fb_w=config.WINDOW_W, fb_h=config.WINDOW_H):
     room.build_room_lists()
 
 
-def _draw_room(char, translate_x, mirror, warn=False):
+def _draw_room(char, translate_x, mirror, warn=False, offline=False):
     # কী করছে: এক রুম আঁকছে design §8-এর স্তর ক্রমে — স্ট্যাটিক রুম → নিভানো স্ক্রিন/ল্যাম্প (ম্লান হবে) →
     #           চরিত্র → অন্ধকার overlay → glow → রশ্মি → স্ক্রিন আভা → জ্বলন্ত স্ক্রিন/ল্যাম্প (উজ্জ্বল, উপরে)
     #           → ডিবাগ overlay। সব এক push/pop matrix-এর ভেতরে (translate, Rifat হলে reflect)।
@@ -202,6 +206,10 @@ def _draw_room(char, translate_x, mirror, warn=False):
         room.draw_screen(on=True)
     if char.lamp_on:
         room.draw_lamp_shade(on=True, warn=warn)          # দ্বন্দ্ব ব্লিঙ্ক ফ্রেমে warn=True → লাল
+
+    # সঙ্গী অফলাইন: পুরো রুমে বাড়তি অন্ধকার (design §3) — emissive-এর পরেও, যাতে স্ক্রিন/ল্যাম্পও ম্লান হয়
+    if offline:
+        lighting.draw_offline()
 
     # ডিবাগ overlay (দুই রুমেই, matrix-এর ভেতরে যাতে transform মেলে; text লেবেল বাইরে আঁকা হয়)
     if _debug:
@@ -252,6 +260,25 @@ def _draw_labels():
     _draw_centered_text(rx, y, "Rifat", config.TEXT, LABEL_FONT)
 
 
+def _draw_plaques(views):
+    # কী করছে: যে রুমের মানুষ অফলাইন, সেই রুমে একটি ছোট "OFFLINE" ফলক আঁকে (বাক্স + লেখা)
+    # কেন লাগছে: শুধু অন্ধকার দেখে বোঝা যায় না কেন রুম ম্লান; লেখাটি কারণ বলে দেয় (design §3)
+    # real world-এ এটা কোথায় দেখা যায়: disabled কার্ডের উপর "offline" ব্যাজ
+    # নোট: নামের লেবেলের মতোই গ্লোবাল কোঅর্ডিনেটে — mirror matrix-এর ভেতরে হলে লেখা উল্টো হতো
+    px, py, pw, ph = config.PLAQUE_BOX
+    for name, origin, flip in (("samee", config.SAMEE_ORIGIN, False),
+                               ("rifat", config.RIFAT_ORIGIN, True)):
+        if views[name].online:
+            continue
+        ox, oy = origin
+        # Rifat-এর রুম আয়নায় আঁকা হয়, তাই ফলকের x রুমের ডান কিনারা থেকে মাপি
+        bx = (ox + config.ROOM_W - px - pw) if flip else (ox + px)
+        cx = (ox + config.ROOM_W - config.PLAQUE_CX) if flip else (ox + config.PLAQUE_CX)
+        draw_box(bx, oy + py, pw, ph, config.NIGHT, outline=config.OFFLINE_GREY)
+        _draw_centered_text(cx, oy + config.PLAQUE_Y, "OFFLINE",
+                            config.OFFLINE_GREY, DEBUG_FONT)
+
+
 def _draw_debug_labels():
     # কী করছে: ডিবাগ text — Samee-র ৪টি কন্ট্রোল পয়েন্টের নাম (P0..P3) ও নিচে ছোট legend আঁকে,
     #           সব গ্লোবাল কোঅর্ডিনেটে (mirror matrix-এর বাইরে)
@@ -275,26 +302,26 @@ def display():
     glClear(GL_COLOR_BUFFER_BIT)
 
     now = wall_now()
-    views = _views(_state.snapshot(now))     # প্রতি ফ্রেমে একবার snapshot (techspec §7)
+    snap = _state.snapshot(now)              # প্রতি ফ্রেমে একবার snapshot (techspec §7)
+    views = _views(snap)
 
     # দ্বন্দ্ব: দুজনেই কাজ করছে → ল্যাম্প শেড প্রতি 0.5s লাল-হলুদ ব্লিঙ্ক (appflow §7)
     conflict = views["samee"].working and views["rifat"].working
     blink_on = int(anim_time() / config.CONFLICT_BLINK_SECONDS) % 2 == 0
     warn = conflict and blink_on
 
-    _draw_room(samee, config.SAMEE_ORIGIN[0], False, warn)               # translate(2, 2)
-    _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True, warn)  # translate(97+93, 2) + reflect
+    _draw_room(samee, config.SAMEE_ORIGIN[0], False, warn,
+               offline=not views["samee"].online)                        # translate(2, 2)
+    _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True, warn,
+               offline=not views["rifat"].online)       # translate(97+93, 2) + reflect
 
     _draw_divider()
     _draw_frame()
     _draw_labels()   # mirror matrix-এর বাইরে, তাই লেখা সোজা
+    _draw_plaques(views)   # "OFFLINE" ফলক — লেখা, তাই mirror-এর বাইরে
 
-    # প্যানেল (design §9) — snapshot থেকে প্রতিজনের working ও আজকের সময় নিয়ে আঁকি
-    panel_state = {
-        name: {"working": view.working, "seconds": view.today_seconds}
-        for name, view in views.items()
-    }
-    panel.draw_panel(panel_state, _me, now)
+    # প্যানেল (design §2) — পুরো snapshot দিই; প্যানেল শুধু সেটিই পড়ে, লক ধরে না
+    panel.draw_panel(snap)
 
     if _debug:
         _draw_debug_labels()   # ডিবাগ text-ও mirror matrix-এর বাইরে
@@ -341,13 +368,30 @@ def _drain_events():
         count += 1
 
 
+def _push_status(now):
+    # কী করছে: নিজের বর্তমান অবস্থা sync-এর আউটবক্সে দেয় (--offline হলে কিছুই করে না)
+    # কেন লাগছে: working বদলালে, মধ্যরাত পেরোলে ও কাজ চলার সময় প্রতি ৬০s-এ সার্ভারে জানাতে হয় (§6.5)
+    # real world-এ এটা কোথায় দেখা যায়: লোকাল পরিবর্তন → outbox → ব্যাকগ্রাউন্ড sync
+    global _last_push
+    if _sync is None:
+        return
+    _last_push = now
+    _sync.queue_status(sync.status_fields(_state.snapshot(now), now))
+
+
 def _apply_activity(now):
-    # কী করছে: activity.tick() চালিয়ে নিজের working অবস্থা AppState-এ লেখে (বদল হলে since-ও বসে)
-    # কেন লাগছে: এটাই "হুক → আমার চরিত্র" পথের শেষ ধাপ; Phase 11-এ এখান থেকেই push হবে
-    # real world-এ এটা কোথায় দেখা যায়: ডিটেকশনের ফল একটিই state store-এ লেখা
-    _state.roll_day(now)                       # মধ্যরাত (Dhaka) পেরোলে আজকের কাউন্টার ০
-    if _state.set_working(_activity.tick(now), now):
-        print("WSR: working ->", _state.snapshot(now).me.working)
+    # কী করছে: activity.tick() চালিয়ে নিজের working অবস্থা AppState-এ লেখে (বদল হলে since-ও বসে),
+    #           আর বদল/মধ্যরাত/৬০s পেরোলে সার্ভারে পুশের জন্য আউটবক্সে দেয়
+    # কেন লাগছে: এটাই "হুক → আমার চরিত্র → সঙ্গীর স্ক্রিন" পথের মাঝের ধাপ
+    # real world-এ এটা কোথায় দেখা যায়: ডিটেকশনের ফল একটিই state store-এ লেখা, তারপর প্রচার
+    rolled = _state.roll_day(now)              # মধ্যরাত (Dhaka) পেরোলে আজকের কাউন্টার ০
+    changed = _state.set_working(_activity.tick(now), now)
+    snap = _state.snapshot(now)
+    if changed:
+        print("WSR: working ->", snap.me.working)
+    due = snap.me.working and (now - _last_push) >= config.PUSH_WHILE_WORKING
+    if changed or rolled or due:
+        _push_status(now)
 
 
 def tick(dt):
@@ -366,10 +410,11 @@ def tick(dt):
         _window.activate()
 
     views = _views(_state.snapshot(now))
-    samee.set_working(views["samee"].working, now)   # চরিত্র শুধু লক্ষ্য অনুসরণ করে
-    rifat.set_working(views["rifat"].working, now)
-    samee.update(dt)
-    rifat.update(dt)
+    for name, char in (("samee", samee), ("rifat", rifat)):
+        view = views[name]
+        char.set_working(view.working, now)      # চরিত্র শুধু লক্ষ্য অনুসরণ করে
+        if view.online:
+            char.update(dt)                      # অফলাইন সঙ্গীর চরিত্র যেখানে ছিল সেখানেই থাকে (design §3)
 
 
 def state_tick(dt):
@@ -447,13 +492,32 @@ def make_window():
     return win
 
 
+def _start_sync(offline, peer):
+    # কী করছে: --offline না হলে ও credentials পেলে sync থ্রেড চালু করে; নাহলে None দিয়ে বলে দেয় কেন
+    # কেন লাগছে: নেট/কনফিগ ছাড়াও অ্যাপ পুরোপুরি চলবে — শুধু সঙ্গীকে দেখা যাবে না (appflow §10)
+    # real world-এ এটা কোথায় দেখা যায়: ঐচ্ছিক ব্যাকএন্ড — না থাকলে অ্যাপ "লোকাল মোডে" চলে
+    if offline:
+        print("WSR: --offline — no Supabase sync this run")
+        return None
+    settings = userconfig.load(me=_me)
+    if not settings.has_supabase:
+        print("WSR: no Supabase URL/key found (checked config.json, .env, environment)"
+              " — running local only")
+        return None
+    engine = sync.Sync(_state, sync.Client(settings.supabase_url, settings.supabase_key),
+                       me=_me, peer=peer)
+    engine.start()
+    print("WSR: syncing with Supabase (credentials from %s)" % settings.source)
+    return engine
+
+
 def main():
     # কী করছে: আর্গুমেন্ট পড়ে পোর্ট দখল করে (একটাই কপি), listener চালু করে, উইন্ডো খোলে,
     #           দুটি টিক schedule করে ও মেইন লুপে ঢোকে; শেষে listener বন্ধ করে
     # কেন লাগছে: appflow §2-এর স্টার্টআপ ক্রম — bind → state → থ্রেড → উইন্ডো → লুপ
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
     args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
-    global _me, _window, _state, _activity, _listener, _dev
+    global _me, _window, _state, _activity, _listener, _dev, _sync
     _me = args.me        # আমার হুক এই জনের status চালায়; অন্যজন সঙ্গী (peer)
     _dev = args.dev
     peer = "rifat" if _me == "samee" else "samee"
@@ -475,15 +539,21 @@ def main():
     print("WSR: listening on http://%s:%d  (idle timeout %ds%s)"
           % (config.LISTEN_HOST, port, idle, ", dev mode" if _dev else ""))
 
+    _sync = _start_sync(args.offline, peer)
+
     _window = make_window()                           # উইন্ডো + GL কনটেক্সট (এখন GLUT নয়, pyglet)
     init_scene(*_window.get_framebuffer_size())       # প্রজেকশন/blending + display list তৈরি
 
     pyglet.clock.schedule_interval(tick, TICK_SECONDS)                    # ~60 FPS অ্যানিমেশন টিক
     pyglet.clock.schedule_interval(state_tick, config.STATE_TICK_SECONDS)  # প্রতি সেকেন্ডে ডিটেকশন
 
+    _push_status(wall_now())                          # শুরুতেই নিজের অবস্থা জানিয়ে দিই
+
     try:
         pyglet.app.run()                              # ইভেন্ট লুপ; ESC/X না চাপা পর্যন্ত চলবে
     finally:
+        if _sync is not None:
+            _sync.stop()
         _listener.stop()                              # পোর্ট ছেড়ে দিই, যাতে পরের কপি bind করতে পারে
     return 0
 

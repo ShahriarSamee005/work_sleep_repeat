@@ -88,6 +88,16 @@ class AppState:
                 self._since = now
             return True
 
+    def adopt_today(self, seconds, now):
+        # কী করছে: সার্ভারে রাখা আজকের সময় ফিরিয়ে নেয় (অ্যাপ চালু হওয়ার পরে একবার)
+        # কেন লাগছে: অ্যাপ বন্ধ-চালু করলে আজকের কাউন্টার ০ থেকে শুরু হলে চলবে না (techspec §6.4);
+        #           চলতি সেশন থাকলে তার হিসাব এখন থেকে আবার শুরু হয়, যাতে দুবার না গোনা হয়
+        # real world-এ এটা কোথায় দেখা যায়: ক্লায়েন্ট রিস্টার্টে সার্ভার থেকে কাউন্টার resume করা
+        with self._lock:
+            self._today_seconds = float(max(0, seconds))
+            if self._since is not None:
+                self._since = now
+
     def set_connected(self, connected):
         # কী করছে: Supabase-এ পৌঁছানো যাচ্ছে কিনা তা রাখে (Phase 11-এর sync থ্রেড ডাকবে)
         # কেন লাগছে: প্যানেলের নিচে "offline" লাইন এই মান দেখে দেখানো হবে

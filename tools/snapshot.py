@@ -64,7 +64,8 @@ def _grab():
     return Image.frombytes("RGB", (W, H), bytes(data)).transpose(Image.FLIP_TOP_BOTTOM)
 
 
-def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_worked=0.0):
+def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_worked=0.0,
+                peer_offline=False, disconnected=False):
     # কী করছে: deterministic একটি AppState বানিয়ে app._state-এ বসায় — নিজের since পিছিয়ে দিয়ে
     #           কার্ডে ঠিক "worked" সময় দেখায়, সঙ্গীর মান সরাসরি সেট করে
     # কেন লাগছে: Phase 10 থেকে প্যানেল state.snapshot() পড়ে (techspec §7), চরিত্রের কাউন্টার নয়
@@ -76,7 +77,8 @@ def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_
     if my_working:
         st.set_working(True, FAKE_NOW - my_worked)    # now = FAKE_NOW → কার্ডে worked সেকেন্ড
     peer_working, peer_worked = both[peer]
-    st.set_peer(working=peer_working, today_seconds=int(peer_worked))
+    st.set_peer(working=peer_working, today_seconds=int(peer_worked), online=not peer_offline)
+    st.set_connected(not disconnected)
     app._state = st
 
 
@@ -91,7 +93,8 @@ def _settle(samee_work, rifat_work, seconds=4.0):
         app.rifat.update(_DT)
 
 
-def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_worked=0.0):
+def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_worked=0.0,
+                  peer_offline=False, disconnected=False):
     # কী করছে: দুই রুম নির্দিষ্ট অবস্থায় থিতু করে, প্যানেলের --me সেট করে, কাজ-করা চরিত্রের কার্ড
     #           সময় deterministic করে (since পিছিয়ে), t সময়ে একটি ফ্রেম PNG-তে সেভ করে
     # কেন লাগছে: idle/work, প্যানেল, ও নির্দিষ্ট কার্ড-সময় (যেমন "1h 05m") যাচাই করতে
@@ -100,7 +103,8 @@ def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_work
     app._fake_wall = FAKE_NOW                       # সময় ফ্রিজ — context warm-up-এর display()-ও
                                                     # যেন FAKE_NOW-এই দিন সেট করে (নাহলে দিন mismatch-এ
                                                     # মধ্যরাত রিসেট since মুছে দেয়)
-    _fake_state(me, samee == "work", rifat == "work", samee_worked, rifat_worked)
+    _fake_state(me, samee == "work", rifat == "work", samee_worked, rifat_worked,
+                peer_offline=peer_offline, disconnected=disconnected)
     _setup_context()
     _settle(samee == "work", rifat == "work")
     app._fake_time = t
@@ -181,7 +185,11 @@ def main():
     parser.add_argument("--debug", action="store_true",
                         help="turn on the debug overlay (grid, Bezier, clip rects, red/green rays)")
     parser.add_argument("--me", choices=("samee", "rifat"), default="samee",
-                        help="which user's panel toggle to show")
+                        help="which user is running the app (panel/status wording)")
+    parser.add_argument("--peer-offline", action="store_true",
+                        help="draw the peer as offline (extra darkness + OFFLINE plaque)")
+    parser.add_argument("--disconnected", action="store_true",
+                        help="draw the panel's bottom line as offline - retrying")
     parser.add_argument("--samee-worked", type=float, default=0.0,
                         help="seconds to show on Samee's card when Samee is working")
     parser.add_argument("--rifat-worked", type=float, default=0.0,
@@ -195,7 +203,8 @@ def main():
         render_sheet(args.sheet, args.toggle, frames, start_work=(args.start == "work"))
     else:
         render_single(args.out or "out.png", args.samee, args.rifat, args.t,
-                      me=args.me, samee_worked=args.samee_worked, rifat_worked=args.rifat_worked)
+                      me=args.me, samee_worked=args.samee_worked, rifat_worked=args.rifat_worked,
+                      peer_offline=args.peer_offline, disconnected=args.disconnected)
 
     if _window is not None:
         _window.close()        # উইন্ডো বন্ধ করে পরিষ্কারভাবে বেরিয়ে যাই (আগে glutLeaveMainLoop ছিল)

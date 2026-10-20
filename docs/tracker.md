@@ -2,8 +2,8 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 10 — Local detection + pyglet window (✅ built, awaiting manual gate) → next: Phase 11
-**Last updated:** 2026-10-20
+**Current phase:** 11 — Supabase sync (✅ complete) → next: Phase 13 — Tray + alerts
+**Last updated:** 2026-10-21
 
 ---
 
@@ -13,8 +13,8 @@
 |---|---|---|---|---|
 | 0–8 | Lab build (graphics, animation, lighting, panel) | ✅ Done | ✅ | (see git log) |
 | 9 | Spike: verify assumptions | ✅ Done | ✅ | (spike/) |
-| 10 | Local detection + pyglet window | 🟨 Built, manual gate pending | Step A ✅ | `04914fc` (Step A) |
-| 11 | Supabase sync | ⬜ Not started | — | — |
+| 10 | Local detection + pyglet window | ✅ Done | ✅ (manual gate run by Samee) | `04914fc`, `cd5d8b4` |
+| 11 | Supabase sync | ✅ Done | ✅ (gate run by Samee on the real project) | — |
 | 12 | ~~Usage limits + split~~ **Dropped** | ⬛ Cut | — | — |
 | 13 | Tray + alerts | ⬜ Not started | — | — |
 | 14 | Dibs | ⬜ Not started | — | — |
@@ -23,6 +23,31 @@
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 11 results (2026-10-21)
+
+Built: `supabase/schema.sql`, `sync.py`, `userconfig.py`, panel status/dots/connection line,
+offline room overlay + plaque. `pytest` green (72 tests). The rows below marked ✅ against a
+**stand-in Supabase** (a local HTTP server speaking the same two RPCs) were re-checked on the
+real project on 2026-10-21; the gate passed.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 72 passed (sync 22, clock/state/panel 20, activity 13, settings 16, character 6) |
+| App starts the sync thread | ✅ "syncing with Supabase (credentials from environment)"; `--offline` and missing credentials both fall back to local-only with a clear line |
+| Hook → server | ✅ `UserPromptSubmit` → `working=true`, `since`, `today_date` pushed within one poll |
+| Server → other PC | ✅ Second engine saw `working=True, online=True, name=Rifat` |
+| Idle timeout → server | ✅ `working=false` pushed after the idle window |
+| Peer offline | ✅ Server clock pushed 120 s ahead → peer went offline, then back online |
+| Dead server | ✅ Two failed steps → `connected=False`, app kept running and detecting |
+| Restart mid-day | ✅ `today_seconds` resumed from the server row (2400 s) when `today_date` is today |
+| Backoff / outbox / time jump | ✅ Unit-tested: 2→4→8→16→30, latest-wins, >30 s gap forces a full re-push |
+| `schema.sql` on the real project | ✅ Ran clean on a fresh Supabase project (Singapore region); both seed rows present |
+| Anon key cannot read the table | ✅ `GET /rest/v1/wsr_status` refused with the publishable/anon key, while `POST /rest/v1/rpc/wsr_get_state` returned 200 |
+| Two copies on one PC | ✅ Key `1` on the Samee copy moved Samee's room on the Rifat copy within ~3 s |
+| Still to do on two real PCs | ⏭️ Rifat's machine, Wi-Fi off/on, PC sleep/wake, a real Dhaka midnight — all land in the Phase 17 trial |
 
 ---
 
@@ -105,6 +130,11 @@ Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
 | 2026-10-20 | `listener` sets `allow_reuse_address = False` | On Windows SO_REUSEADDR lets a second process bind the same port, which would break "port bind = single-instance lock" | techspec §8 |
 | 2026-10-20 | Hook events reach `activity` through a `queue` | `activity` stays pure (no threads/locks); the listener thread only enqueues, the main loop drains each frame | techspec §3 |
 | 2026-10-20 | `panel.draw_panel` keeps its dict argument | `main` builds the dict from `state.snapshot()` each frame, so the lock rule in §7 holds without a panel rewrite; the panel takes the snapshot itself when it grows dibs/online dots (Phase 14) | — |
+| 2026-10-20 | `schema.sql` drops the usage tables and `wsr_report_usage`/`wsr_credit` | Usage was cut; only `wsr_status`, `wsr_update_status` and `wsr_get_state` are created, so the anon surface stays as small as possible | techspec §6 (noted inline) |
+| 2026-10-20 | Panel says "You are working", not "You're working" | This bitmap font draws the apostrophe as a slanted tick ("You´re"); the wording change is cheaper than hand-editing a glyph | design §2.1 |
+| 2026-10-20 | Time cards moved up 4 rows (y 62 / 77) | The bottom connection line (design §2) had no room; it now sits at y 94 clear of the cards and the panel border | design §2 |
+| 2026-10-20 | `panel.draw_panel` now takes the `StateSnapshot` | It needs peer `online` and `connected`, which the old dict never carried; render still reads a frozen snapshot and no lock (techspec §7) | techspec §3 |
+| 2026-10-20 | An offline peer's character stops animating | design §3: the room shows the last known state, so a half-finished walk freezing is the intended look, not a bug | design §3 |
 | 2026-10-20 | No new `TZ` constant | `config.TIMEZONE` already held `"Asia/Dhaka"`; `clock.py` uses it with the fixed UTC+6 offset, so no `tzdata` dependency on Windows | — |
 
 ---
@@ -126,6 +156,9 @@ Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
 | `clock.fmt_duration` duplicates `panel.format_time` | Phase 10 | Render modules may not import layer 1 (techspec §3). Keep both in step; revisit if the panel ever takes formatted strings |
 | `tests/test_character.py` uses soft `check()` asserts | Lab | A final `test_no_check_failures` now makes pytest see them; convert to plain asserts if the file is touched again |
 | `config.TOGGLE_*` constants unused | Phase 10 | Toggle removed; Phase 14's dibs button reuses that space and those boxes |
+| Shared anon key is in `.env` in plain text | Phase 11 | Same risk the security row below covers; fine for two friends, redo before anyone else |
+| No `wsr.log` file yet (techspec §12) | Phase 11 | Sync/listener print to the console. Add the rotating log in Phase 13 with the tray |
+| Peer's `today_seconds` only moves on a poll | Phase 11 | It steps every 2 s instead of counting up smoothly. Leave unless it looks jumpy in the trial |
 | `hex_to_rgb` memoized | Lab | Revisit only if palette grows |
 | Debug view redraws unclipped rays (~40 fps in debug) | Lab | Leave; dev tool only |
 | Untidy commit labels phases 5–6 (`dbe9700`…) | Lab | Leave as is |

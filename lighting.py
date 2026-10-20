@@ -34,6 +34,13 @@ def draw_darkness(working):
     draw_rect(0, 0, config.ROOM_W, config.ROOM_H, config.NIGHT, alpha)
 
 
+def draw_offline():
+    # কী করছে: পুরো রুমের উপর আরেকটি NIGHT quad বসায় (DARK_OFFLINE alpha)
+    # কেন লাগছে: সঙ্গীর পিসি বন্ধ/নেট নেই — তার রুম বাকি সবের চেয়ে স্পষ্ট ম্লান দেখাতে (design §3)
+    # real world-এ এটা কোথায় দেখা যায়: UI-তে "stale/disabled" অংশ ম্লান করে দেওয়া (dimmed state)
+    draw_rect(0, 0, config.ROOM_W, config.ROOM_H, config.NIGHT, config.DARK_OFFLINE)
+
+
 def draw_glow():
     # কী করছে: ল্যাম্পের কেন্দ্র ঘিরে ৫টি ভিন্ন ব্যাসার্ধের বৃত্ত (scanline_circle) একই উষ্ণ রঙে স্তরে স্তরে আঁকে
     # কেন লাগছে: স্বচ্ছ বৃত্তগুলো জমে (alpha stacking) কেন্দ্রকে উজ্জ্বল করে — পিক্সেল-আর্ট ধাপযুক্ত আভা

@@ -30,6 +30,7 @@ WALK_P3 = (57, 44)               # শেষ: চেয়ারের সাম
 # লাইটিং (techspec §4.1 / design §8)
 DARK_IDLE = 0.40                 # idle রুমের অন্ধকার overlay-র alpha
 DARK_WORK = 0.30                 # কাজের রুমের অন্ধকার overlay-র alpha
+DARK_OFFLINE = 0.40              # সঙ্গী অফলাইন হলে তার রুমে বাড়তি অন্ধকার (design §3)
 GLOW_CENTER = (49, 13)          # ল্যাম্পের glow-র কেন্দ্র (রুম-লোকাল)
 GLOW_RADII = [43, 31, 21, 13, 7]  # ৫টি glow বৃত্তের ব্যাসার্ধ (বড় → ছোট)
 GLOW_ALPHA = 0.08               # প্রতিটি glow বৃত্তের alpha (স্তরে স্তরে জমে উজ্জ্বল হয়)
@@ -62,8 +63,16 @@ DEBUG_CLIP = "#8fd0ff"          # রুমের clip rectangle-এর রঙ
 DEBUG_RAY_UNCLIPPED = "#ff3b3b"  # রশ্মি কাটার আগে (লাল) — ডিভাইডার পেরিয়ে যেত
 DEBUG_RAY_CLIPPED = "#3bff6a"    # রশ্মি কাটার পরে (সবুজ) — রুমের প্রান্তে থামে
 
-# সিংক ও সময় হিসাব (techspec §4.1 / appflow §6)
-POLL_INTERVAL = 1.5             # Supabase পোল করার বিরতি (সেকেন্ড)
+# সিংক ও সময় হিসাব (techspec §6.4 / appflow §6, §10–12)
+POLL_INTERVAL = 2.0             # Supabase পোল করার বিরতি (সেকেন্ড; techspec §6.4)
+SYNC_TIMEOUT = 5.0              # Supabase HTTP টাইমআউট (সেকেন্ড) — লোকাল HTTP_TIMEOUT আলাদা
+HEARTBEAT_INTERVAL = 20         # এতক্ষণে কিছু না পাঠালে খালি update পাঠিয়ে "বেঁচে আছি" জানাই
+PEER_OFFLINE_AFTER = 60         # সঙ্গীর heartbeat এত সেকেন্ড পুরনো হলে অফলাইন ধরি (সার্ভার সময়ে)
+PUSH_WHILE_WORKING = 60         # কাজ চলার সময় প্রতি এতক্ষণে today_seconds পুশ করি
+BACKOFF_SECONDS = (2, 4, 8, 16, 30)   # পরপর ব্যর্থতায় অপেক্ষার ক্রম (শেষ মানটিই সর্বোচ্চ)
+FAILURES_BEFORE_OFFLINE = 2     # এতবার পরপর ব্যর্থ হলে প্যানেলে "offline" দেখাই (appflow §10)
+TIME_JUMP_SECONDS = 30          # লুপের দুই চক্রে এত ফাঁক = পিসি ঘুমিয়েছিল → তৎক্ষণাৎ reconnect
+APP_VERSION = "2.0-phase11"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
 TIMEZONE = "Asia/Dhaka"        # দিন হিসাবের টাইমজোন
 TZ_OFFSET_SECONDS = 6 * 3600   # Asia/Dhaka = UTC+6 (DST নেই); দিন-নম্বর বের করতে UTC-তে যোগ করি
 TIME_SCALE = 1.0               # সময় দ্রুত করার গুণক (কার্ড/মধ্যরাত রিসেট টেস্টে বাড়াই; ডিফল্ট বাস্তব গতি)
@@ -166,6 +175,8 @@ TEXT = "#f1e9dd"             # সাধারণ টেক্সট
 TEXT_MUTED = "#d9cbb8"       # হালকা টেক্সট
 TEXT_DIM = "#a99bb5"         # আরও ম্লান টেক্সট
 GOLD = "#ffd27a"            # সক্রিয় সময়, কাজের সময়ের স্ট্যাটাস
+ONLINE_GREEN = "#7fc29b"     # অনলাইন ডট (design §2.4) — রাতের প্যালেটের সাথে মেলে, কম saturation
+OFFLINE_GREY = "#7a86a0"     # অফলাইন লেখা ও ডট — দেয়ালের নীলচে-ধূসর পরিবারের (design §8)
 
 # design.md §7 অতিরিক্ত স্প্রাইট রঙ + §5 প্রতিফলন রঙ (§4 প্যালেটে নাম-কলামে নেই)
 MOON_LIGHT = "#f1e6c6"   # MOON স্প্রাইটের আলো (Y)
@@ -357,10 +368,17 @@ TOGGLE_KNOB_W = 8                # টগল knob-এর প্রস্থ
 TOGGLE_KNOB_PAD = 1              # knob ও বাক্সের কিনারার ফাঁক
 TOGGLE_LABEL_Y = 60              # "Sleeping"/"Working" baseline
 
-CARD1_BOX = (196, 66, 40, 12)    # Samee টাইম কার্ড
-CARD2_BOX = (196, 81, 40, 12)    # Rifat টাইম কার্ড
+CARD1_BOX = (196, 62, 40, 12)    # Samee টাইম কার্ড (Phase 11-এ ৪ সারি উপরে — নিচে লাইনের জায়গা)
+CARD2_BOX = (196, 77, 40, 12)    # Rifat টাইম কার্ড
 CARD_NAME_DY = 4                 # কার্ডের উপরে নাম লাইনের baseline offset (কার্ড y থেকে)
 CARD_TIME_DY = 10                # কার্ডের নিচে সময় লাইনের baseline offset (কার্ড y থেকে)
+CARD_DOT = (3, 3, 2, 2)          # কার্ডের বাঁয়ে online ডট (dx, dy, w, h — কার্ড কোণ থেকে)
+PANEL_CONN_Y = 94                # প্যানেলের নিচের connection লাইনের baseline (design §2)
+
+# রুমের "OFFLINE" ফলক (design §3) — রুম-লোকাল; mirror-এর বাইরে আঁকা হয়, তাই লেখা সোজা থাকে
+PLAQUE_CX = 59                   # ফলকের কেন্দ্র x (নামের লেবেলের সমান)
+PLAQUE_Y = 77                    # ফলকের লেখার baseline y (বাক্সের মাঝ বরাবর)
+PLAQUE_BOX = (44, 71, 30, 9)     # ফলকের পেছনের বাক্স (x, y, w, h)
 
 # দ্বন্দ্ব (দুজনেই কাজ) — ল্যাম্প শেড প্রতি 0.5s লাল-হলুদ ব্লিঙ্ক (appflow §7)
 CONFLICT_BLINK_SECONDS = 0.5     # ব্লিঙ্কের অর্ধ-চক্র (সেকেন্ড)
