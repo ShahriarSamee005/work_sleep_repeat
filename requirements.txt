@@ -1,4 +1,5 @@
 PyOpenGL
 PyOpenGL_accelerate
+pyglet
 requests
 python-dotenv

@@ -20,20 +20,10 @@ from OpenGL.GL import (
     glPixelStorei,
     glReadBuffer,
     glReadPixels,
-    GL_FRONT,
+    GL_BACK,
     GL_PACK_ALIGNMENT,
     GL_RGB,
     GL_UNSIGNED_BYTE,
-)
-from OpenGL.GLUT import (
-    glutCreateWindow,
-    glutDisplayFunc,
-    glutInit,
-    glutInitDisplayMode,
-    glutInitWindowSize,
-    glutMainLoopEvent,
-    GLUT_DOUBLE,
-    GLUT_RGBA,
 )
 from PIL import Image, ImageDraw
 
@@ -42,32 +32,30 @@ import config
 import main as app
 
 W, H = config.WINDOW_W, config.WINDOW_H
+_window = None               # pyglet উইন্ডো (_setup_context তৈরি করে)
 _DT = 1.0 / 60.0
 FAKE_NOW = 1_700_000_000.0   # স্থির virtual epoch — snapshot-এ টাইম কার্ড deterministic রাখতে
 
 
 def _setup_context():
-    # কী করছে: GLUT উইন্ডো/কনটেক্সট বানায়, display callback বাঁধে ও display list তৈরি করে
+    # কী করছে: pyglet উইন্ডো/কনটেক্সট বানায় (অ্যাপের মতোই legacy GL) ও display list তৈরি করে
     # কেন লাগছে: রেন্ডার করতে GL কনটেক্সট ও রুমের list দরকার (একবারই)
     # real world-এ এটা কোথায় দেখা যায়: হেডলেস রেন্ডার টেস্টে অফস্ক্রিন কনটেক্সট সেটআপ
-    glutInit([sys.argv[0]])
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA)
-    glutInitWindowSize(W, H)
-    glutCreateWindow(b"snapshot")
-    glutDisplayFunc(app.display)
-    app.init_scene()
-    for _ in range(3):
-        glutMainLoopEvent()
+    # Phase 10: GLUT বাদ — অ্যাপের make_window()-এর মতোই কনটেক্সট, যাতে ছবি অ্যাপের সাথে মেলে
+    global _window
+    _window = app.make_window()
+    app.init_scene(*_window.get_framebuffer_size())
+    _window.dispatch_events()
 
 
 def _grab():
-    # কী করছে: app.display() একবার এঁকে front buffer পড়ে উল্টে দিয়ে PIL Image ফেরত দেয়
+    # কী করছে: app.display() একবার এঁকে back buffer পড়ে উল্টে দিয়ে PIL Image ফেরত দেয়
     # কেন লাগছে: একই render path (display) ব্যবহার করে বর্তমান অবস্থার ছবি নিতে
     # real world-এ এটা কোথায় দেখা যায়: screenshot regression test-এ framebuffer capture
+    # নোট: flip না করে সরাসরি GL_BACK পড়ি — display() এখন নিজে সোয়াপ করে না (pyglet করে)
+    _window.switch_to()
     app.display()
-    for _ in range(2):
-        glutMainLoopEvent()
-    glReadBuffer(GL_FRONT)
+    glReadBuffer(GL_BACK)
     glPixelStorei(GL_PACK_ALIGNMENT, 1)
     data = glReadPixels(0, 0, W, H, GL_RGB, GL_UNSIGNED_BYTE)
     if hasattr(data, "tobytes"):
@@ -196,8 +184,8 @@ def main():
         render_single(args.out or "out.png", args.samee, args.rifat, args.t,
                       me=args.me, samee_worked=args.samee_worked, rifat_worked=args.rifat_worked)
 
-    if app.glutLeaveMainLoop is not None:
-        app.glutLeaveMainLoop()
+    if _window is not None:
+        _window.close()        # উইন্ডো বন্ধ করে পরিষ্কারভাবে বেরিয়ে যাই (আগে glutLeaveMainLoop ছিল)
 
 
 if __name__ == "__main__":

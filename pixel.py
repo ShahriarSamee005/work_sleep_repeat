@@ -1,5 +1,3 @@
-"""pixel.py — নিচু স্তরের ড্রয়িং হেল্পার: hex→rgb, set_color, pixel/rect/box/sprite/text।"""
-
 from functools import lru_cache
 
 from OpenGL.GL import (
@@ -13,11 +11,9 @@ from OpenGL.GL import (
     GL_QUADS,
     GL_UNPACK_ALIGNMENT,
 )
-from OpenGL.GLUT import glutBitmapCharacter, glutBitmapWidth
-
 import config
 
-BULLET = "•"                                # '•' — GLUT bitmap font এই কোড (8226) আঁকতে পারে না
+BULLET = "•"                                # '•' — bitmap font এই কোড (8226) আঁকতে পারে না
 _BULLET_BITS = bytes((0xF0, 0xF0, 0xF0, 0xF0))   # 4×4 ভরাট বর্গ (প্রতি বাইটের উপরের ৪টি বিট সেট)
 DASH = "—"                                   # '—' em-dash (U+2014, 8212) — একইভাবে bitmap font আঁকে না
 _DASH_BITS = bytes((0xFC, 0xFC))             # 6×2 অনুভূমিক বার (প্রতি বাইটের উপরের ৬টি বিট সেট)
@@ -83,23 +79,34 @@ def draw_sprite(x, y, rows, color_map):
             draw_pixel(x + dx, y + dy, color_map[ch])
 
 
+def text_width(text, font):
+    # কী করছে: text আঁকলে pen মোট কত window পিক্সেল ডানে যাবে তা দেয়
+    # কেন লাগছে: লেখা center করতে প্রস্থ আগে জানা লাগে; দুই ফন্টই fixed-pitch, তাই গুণ করলেই হয়
+    # real world-এ এটা কোথায় দেখা যায়: টেক্সট লেআউটে "measure then draw" ধাপ
+    # নোট: '•'/'—'-ও এক স্বাভাবিক অক্ষরের সমান জায়গা নেয় (নিচে draw_text তাই করে), তাই আলাদা হিসাব নেই
+    return len(text) * font.advance
+
+
 def draw_text(x, y, text, color, font):
-    # কী করছে: (x, y) গ্রিড অবস্থানে GLUT bitmap font দিয়ে text আঁকছে; '•' পেলে হাতে ছোট বর্গ
-    #           এঁকে pen-কে একটি স্বাভাবিক অক্ষরের সমান ডানে সরিয়ে দিচ্ছে
-    # কেন লাগছে: GLUT bitmap font শুধু 1–255 কোডের অক্ষর চেনে, তাই '•' (U+2022 = 8226)-এর প্রস্থ 0;
-    #           এমনি আঁকলে বুলেট উধাও হয় ও পরের অক্ষর এগোয় না — তাই বুলেট নিজে এঁকে pen সরাই
+    # কী করছে: (x, y) গ্রিড অবস্থানে আমাদের bitmap font (font.py) দিয়ে text আঁকছে; '•'/'—' পেলে
+    #           হাতে ছোট বর্গ/বার এঁকে pen-কে একটি স্বাভাবিক অক্ষরের সমান ডানে সরিয়ে দিচ্ছে
+    # কেন লাগছে: ফন্ট টেবিলে শুধু printable ASCII আছে, তাই '•' (U+2022) / '—' (U+2014) নেই;
+    #           এমনি আঁকলে ওরা উধাও হতো — তাই নিজে এঁকে pen সরাই
     # real world-এ এটা কোথায় দেখা যায়: ফন্টে না-থাকা glyph-এর বদলে fallback চিহ্ন আঁকা (tofu box)
+    # নোট: glyph-এর সারিগুলো window পিক্সেলে নিচ-থেকে-উপরে সাজানো (glBitmap-এর নিয়ম), তাই
+    #      প্রজেকশন y=0 উপরে হলেও লেখা উল্টো হয় না
     set_color(color)
     glRasterPos2f(x, y)                          # লেখা শুরুর অবস্থান (গ্রিড কোঅর্ডিনেট)
-    advance = glutBitmapWidth(font, ord("o"))    # একটি "স্বাভাবিক" অক্ষরের প্রস্থ (window pixel-এ)
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1)        # সারি-বাইট ৮-এর গুণিতক নয়, তাই alignment=1
+    advance = float(font.advance)                # একটি অক্ষরের প্রস্থ (window pixel-এ)
     for ch in text:
         if ch == BULLET:
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)   # 4-চওড়া bitmap ঠিকভাবে পড়তে alignment=1
             # 4×4 বর্গ আঁকে (লেখার উল্লম্ব মাঝ বরাবর) এবং pen-কে normal char-এর সমান সরায়
-            glBitmap(4, 4, -2.0, -2.0, float(advance), 0.0, _BULLET_BITS)
+            glBitmap(4, 4, -2.0, -2.0, advance, 0.0, _BULLET_BITS)
         elif ch == DASH:
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)   # 6-চওড়া bitmap-এর জন্য alignment=1
             # 6×2 অনুভূমিক বার আঁকে (baseline থেকে ~4px উপরে, লেখার মাঝ বরাবর) ও pen সরায়
-            glBitmap(6, 2, 0.0, -4.0, float(advance), 0.0, _DASH_BITS)
+            glBitmap(6, 2, 0.0, -4.0, advance, 0.0, _DASH_BITS)
         else:
-            glutBitmapCharacter(font, ord(ch))      # এক অক্ষর এঁকে pen ডান দিকে সরায়
+            # এক অক্ষরের glyph এঁকে pen ডান দিকে সরায় (GLUT-এর glutBitmapCharacter যা করত)
+            glBitmap(font.width, font.height, font.xorig, font.yorig,
+                     advance, 0.0, font.bits(ch))

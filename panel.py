@@ -1,16 +1,10 @@
-"""panel.py — ডান পাশের প্যানেল (grid x192–239): moon/sun আইকন, স্ট্যাটাস, টগল, দুই টাইম কার্ড, দ্বন্দ্ব সতর্কতা।
-
-সব কোঅর্ডিনেট গ্লোবাল গ্রিডে (কোনো mirror/room transform ছাড়া); design §9 থেকে config-এ রাখা মান ব্যবহার করে।
-"""
-
-from OpenGL.GLUT import glutBitmapWidth, GLUT_BITMAP_8_BY_13
-
+import font
 import sprites
-from pixel import draw_box, draw_rect, draw_sprite, draw_text
+from pixel import draw_box, draw_rect, draw_sprite, draw_text, text_width
 
 import config
 
-PANEL_FONT = GLUT_BITMAP_8_BY_13   # প্যানেলের সব লেখা এই ফন্টে (design §9)
+PANEL_FONT = font.BITMAP_8X13      # প্যানেলের সব লেখা এই ফন্টে (design §9)
 
 
 def format_time(seconds):
@@ -27,9 +21,10 @@ def format_time(seconds):
 
 def screen_to_grid(mx, my):
     # কী করছে: মাউসের window পিক্সেল (mx,my) কে গ্রিড কোঅর্ডিনেটে (gx,gy) বদলায় (÷ PIXEL)
-    # কেন লাগছে: GLUT মাউস ইভেন্ট window পিক্সেলে আসে; আমাদের হিসাব গ্রিড এককে
+    # কেন লাগছে: মাউস ইভেন্ট window পিক্সেলে আসে; আমাদের হিসাব গ্রিড এককে
     # real world-এ এটা কোথায় দেখা যায়: স্ক্রিন স্পেস → world/UI স্পেস রূপান্তর (hit-testing)
-    # GLUT-এর মাউস y উপরে-থেকে (top-down), আমাদের gluOrtho2D-ও y=0 উপরে — তাই সরাসরি ভাগ
+    # এখানে my উপরে-থেকে (top-down) ধরা, আমাদের ortho-ও y=0 উপরে — তাই সরাসরি ভাগ।
+    # pyglet-এর মাউস y নিচ-থেকে আসে, তাই main.py কল করার আগে উল্টে দেয়
     return (mx / config.PIXEL, my / config.PIXEL)
 
 
@@ -45,10 +40,9 @@ def _draw_centered(cx, y, text, color):
     # কী করছে: cx-কে কেন্দ্র ধরে text-এর প্রস্থ মেপে গ্রিড এককে বাঁয়ে সরিয়ে আঁকে
     # কেন লাগছে: প্যানেলের লেখাগুলো ৪৮-পিক্সেল কলামে মাঝ বরাবর বসাতে
     # real world-এ এটা কোথায় দেখা যায়: UI টেক্সট center-align
-    # নোট: '—'/'•'-এর মতো bitmap font-এ না-থাকা অক্ষরের প্রস্থ 0 আসে; draw_text তাদের একটি
-    #      স্বাভাবিক অক্ষরের সমান সরায়, তাই মাপার সময়ও সেই advance ধরি (নাহলে center সরে যায়)
-    advance = glutBitmapWidth(PANEL_FONT, ord("o"))
-    width_px = sum((glutBitmapWidth(PANEL_FONT, ord(c)) or advance) for c in text)
+    # নোট: '—'/'•'-ও এক স্বাভাবিক অক্ষরের সমান জায়গা নেয় (draw_text তাদের pen সমানই সরায়),
+    #      তাই text_width fixed-pitch হিসাবেই মাপে — center ঠিক থাকে
+    width_px = text_width(text, PANEL_FONT)
     start_x = cx - (width_px / config.PIXEL) / 2.0
     draw_text(start_x, y, text, color, PANEL_FONT)
 
