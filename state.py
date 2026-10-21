@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 
 import clock
+import config
 
 # UsageView — DROPPED 2026-10-20 (usage ফিচার বাদ, tracker Decisions)। techspec §7-এ তালিকায় আছে,
 # কিন্তু এখানে বানানো হয়নি; usage ফিরলে §7-এর কমেন্ট করা শেপ থেকে যোগ করতে হবে।
@@ -48,6 +49,7 @@ class AppState:
         self._since = None            # epoch সেকেন্ড বা None (ভিউতে datetime হয়ে যায়)
         self._today_seconds = 0.0     # শেষ হওয়া সেশনগুলোর যোগফল (চলতি সেশন এতে নেই)
         self._wants_next = False
+        self._wants_next_at = None    # dibs কখন ডেকেছি (epoch) — মেয়াদ গোনার জন্য
         self._day = clock.dhaka_today(now)   # today_seconds কোন Dhaka দিনের, তা মনে রাখি
         self._connected = False
         # সঙ্গীর অবস্থা Phase 11-এর sync থ্রেড ভরবে; এখন প্লেসহোল্ডার (ঘুমন্ত, অফলাইন)
@@ -68,10 +70,36 @@ class AppState:
                 return False
             if working:
                 self._since = now
+                self._wants_next = False      # কাজ শুরু করলে নিজের dibs আপনিই বাতিল (techspec §9)
+                self._wants_next_at = None
             elif self._since is not None:
                 self._today_seconds += max(0.0, now - self._since)
                 self._since = None
             self._working = working
+            return True
+
+    def set_dibs(self, wants, now):
+        # কী করছে: নিজের "পরেরবার আমি" (dibs) চালু/বাতিল করে; বদল হলে True দেয়
+        # কেন লাগছে: সঙ্গী কাজ করার সময় তাকে না থামিয়ে জানানো যে আমি পরে চাই (appflow §8)
+        # real world-এ এটা কোথায় দেখা যায়: কিউতে নাম লেখানো / "notify me when free"
+        with self._lock:
+            if wants == self._wants_next:
+                return False
+            self._wants_next = wants
+            self._wants_next_at = now if wants else None
+            return True
+
+    def expire_dibs(self, now):
+        # কী করছে: DIBS_EXPIRE পেরিয়ে গেলে নিজের dibs বাতিল করে (বাতিল হলে True)
+        # কেন লাগছে: ভুলে ডেকে রাখা dibs সারাদিন ঝুলে থাকলে সঙ্গী অযথা চাপে থাকত (techspec §9)
+        # real world-এ এটা কোথায় দেখা যায়: TTL দিয়ে আপনা-আপনি ছেড়ে যাওয়া রিজার্ভেশন
+        with self._lock:
+            if not self._wants_next or self._wants_next_at is None:
+                return False
+            if now - self._wants_next_at < config.DIBS_EXPIRE:
+                return False
+            self._wants_next = False
+            self._wants_next_at = None
             return True
 
     def roll_day(self, now):
@@ -135,3 +163,10 @@ class AppState:
             )
             return StateSnapshot(me=me, peer=self._peer,
                                  connected=self._connected, now=clock.to_dt(now))
+
+    def dibs_since(self):
+        # কী করছে: নিজের dibs কখন ডাকা হয়েছিল তা (epoch) দেয় — না থাকলে None
+        # কেন লাগছে: সার্ভারে wants_next_at পাঠাতে লাগে; ভিউতে রাখার দরকার নেই (UI দেখায় না)
+        # real world-এ এটা কোথায় দেখা যায়: ভেতরের টাইমস্ট্যাম্প, যা শুধু sync-এর কাজে লাগে
+        with self._lock:
+            return self._wants_next_at

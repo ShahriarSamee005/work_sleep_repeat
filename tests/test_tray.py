@@ -111,7 +111,7 @@ def test_settings_survive_a_restart(tmp_path):
     settings.toggle("free")
 
     saved = json.loads(target.read_text(encoding="utf-8"))
-    assert saved["alerts"] == {"free": False, "conflict": True}
+    assert saved["alerts"] == {"free": False, "dibs": True, "conflict": True}
     assert saved["me"] == "samee" and saved["supabase_key"] == "k"   # বাকি চাবি অক্ষত
 
     restarted = tray.AlertSettings()

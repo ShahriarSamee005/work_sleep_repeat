@@ -2,7 +2,7 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 13 — Tray + alerts (✅ built, awaiting manual gate) → next: Phase 14 — Dibs
+**Current phase:** 14 — Dibs (✅ complete) → next: Phase 15 — Setup + autostart
 **Last updated:** 2026-10-21
 
 ---
@@ -14,15 +14,34 @@
 | 0–8 | Lab build (graphics, animation, lighting, panel) | ✅ Done | ✅ | (see git log) |
 | 9 | Spike: verify assumptions | ✅ Done | ✅ | (spike/) |
 | 10 | Local detection + pyglet window | ✅ Done | ✅ (manual gate run by Samee) | `04914fc`, `cd5d8b4` |
-| 11 | Supabase sync | ✅ Done | ✅ (gate run by Samee on the real project) | — |
+| 11 | Supabase sync | ✅ Done | ✅ (gate run by Samee on the real project) | `b1bd35c` |
 | 12 | ~~Usage limits + split~~ **Dropped** | ⬛ Cut | — | — |
-| 13 | Tray + alerts | 🟨 Built, manual gate pending | — | — |
-| 14 | Dibs | ⬜ Not started | — | — |
+| 13 | Tray + alerts | ✅ Done | ✅ (manual gate run by Samee) | `74573d0` |
+| 14 | Dibs | ✅ Done | ✅ (manual gate run by Samee) | — |
 | 15 | Setup + autostart | ⬜ Not started | — | — |
 | 16 | Package + cleanup | ⬜ Not started | — | — |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 14 results (2026-10-21)
+
+Built: dibs in `state.py` (set, auto-clear, 2 h expiry), pushed through `wsr_update_status`,
+the panel button + "next" card marker, `BUBBLE_DIBS` over the character, the live tray item, and
+the two alert changes. `pytest` green (116 tests).
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 116 passed (16 new dibs tests, 4 new alert tests) |
+| Button only while the peer works | ✅ `panel.dibs_visible`; clicking with nobody working does nothing |
+| Click toggles, tray item mirrors it | ✅ Click on → off → tray command on; click outside unchanged |
+| Auto-clear when I start working | ✅ In `set_working`, so it also clears when detection starts me |
+| 2 h expiry | ✅ Unit-tested at the boundary, fires once, pushed when it clears |
+| "Your turn" replaces "Claude is free" | ✅ Same `free` kind, so one on/off setting covers both (design §5) |
+| "Samee wants it next" | ✅ Fires once per false→true transition, own `dibs` toggle in the menu |
+| Two real copies | ✅ Checked by hand on 2026-10-21: button appears only while the peer works, bubble and "wants it next" toast cross within ~3 s, "Your turn" replaces the plain toast, cancel from the tray after the peer stops, and starting work clears it |
 
 ---
 
@@ -42,7 +61,7 @@ Windows toasts — are in the checklist, not ticked here.
 | Single instance with the tray up | ✅ `/health` ok, `POST /show` 204, second copy exited 0 with "already running" |
 | Alert rules + dedupe | ✅ Unit-tested: free fires once per transition, conflict once per overlap and only after 30 s |
 | Alerts stay off after restart | ✅ Toggle writes `alerts` into `config.json` atomically and `load()` reads it back; other keys untouched |
-| Needs a human | ⏭️ Tray icon art at 16 px in the real tray, menu clicks, real Windows toasts, `--tray` start |
+| Tray icon, menu, toasts, `--tray` | ✅ Checked by hand on 2026-10-21: icons and tooltips track the state, X/ESC hide, Open rooms restores, both toasts fire once, alerts stay off across a restart, Quit releases the port, `--tray` starts hidden |
 
 ---
 
@@ -150,6 +169,9 @@ real project on 2026-10-21; the gate passed.
 | 2026-10-20 | `listener` sets `allow_reuse_address = False` | On Windows SO_REUSEADDR lets a second process bind the same port, which would break "port bind = single-instance lock" | techspec §8 |
 | 2026-10-20 | Hook events reach `activity` through a `queue` | `activity` stays pure (no threads/locks); the listener thread only enqueues, the main loop drains each frame | techspec §3 |
 | 2026-10-20 | `panel.draw_panel` keeps its dict argument | `main` builds the dict from `state.snapshot()` each frame, so the lock rule in §7 holds without a panel rewrite; the panel takes the snapshot itself when it grows dibs/online dots (Phase 14) | — |
+| 2026-10-21 | The dibs bubble's hand is a dark silhouette, offset up-and-right | `SKIN` (#f4f2ee) on the bubble's `BUBBLE_BG` (#f1e9dd) was invisible; and centred above the head the bubble landed inside the bed's headboard and read as bedding | design §3 |
+| 2026-10-21 | "Your turn" keeps the `free` alert kind | It is the same event (peer finished) with different words, so turning "It's free" off silences both — one surprise instead of two | design §5 |
+| 2026-10-21 | A person's own card also shows `next` | design §2.3 only asks for it on the peer's card; making it symmetric costs nothing and keeps the card a complete picture of each person | design §2.3 |
 | 2026-10-21 | `pyglet.app.run(interval=None)`; we draw from the tick ourselves | pyglet's own 60 Hz redraw runs even when the window is hidden — measured **23%** of a core in the tray. Drawing only from the animation tick (which is unscheduled while hidden) drops it to **1%** | — |
 | 2026-10-21 | "It's free" is suppressed while I am working | techspec §9 says only "peer true → false", but if I am already using Claude the news is noise, and the conflict toast covers that case | techspec §9 (noted) |
 | 2026-10-21 | "Call dibs" and "Start with Windows" are disabled menu placeholders | Dibs is Phase 14 and `autostart.py` is Phase 15; showing them greyed keeps the menu shape honest | techspec §9 |

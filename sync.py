@@ -162,7 +162,7 @@ class Sync:
         items = self.outbox.peek()
         if force_push and STATUS not in items:
             snap = self.state.snapshot(now)
-            items = {STATUS: status_fields(snap, now)}   # ঘুম থেকে উঠে পুরো অবস্থা আবার পাঠাই
+            items = {STATUS: status_fields(snap, now, self.state.dibs_since())}   # ঘুম থেকে উঠে পুরো অবস্থা
             self.outbox.put(STATUS, items[STATUS])
         sent = False
         for kind, payload in items.items():
@@ -206,14 +206,17 @@ class Sync:
                     self.state.adopt_today(int(row.get("today_seconds") or 0), now)
 
 
-def status_fields(snap, now):
+def status_fields(snap, now, dibs_since=None):
     # কী করছে: snapshot থেকে wsr_update_status-এ পাঠানোর ফিল্ডগুলো বানায়
     # কেন লাগছে: এক জায়গায় রাখলে পুশের আকার সবসময় এক থাকে (main ও sync দুজনেই এটি ব্যবহার করে)
     # real world-এ এটা কোথায় দেখা যায়: API payload builder — সার্ভারের স্কিমার সাথে এক জায়গায় বাঁধা
+    # dibs_since: AppState.dibs_since() — wants_next_at সার্ভারে পাঠাতে (ভিউতে এটি নেই)
     return {
         "working": snap.me.working,
         "since": snap.me.since.isoformat() if snap.me.since else None,
         "today_seconds": int(snap.me.today_seconds),
         "today_date": clock.dhaka_today(now).isoformat(),
+        "wants_next": snap.me.wants_next,
+        "wants_next_at": clock.to_dt(dibs_since).isoformat() if dibs_since else None,
         "app_version": config.APP_VERSION,
     }

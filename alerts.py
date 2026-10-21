@@ -2,10 +2,11 @@ from dataclasses import dataclass
 
 import config
 
-FREE = "free"            # সঙ্গী কাজ শেষ করেছে — Claude এখন ফাঁকা
+FREE = "free"            # সঙ্গী কাজ শেষ করেছে — Claude এখন ফাঁকা ("Your turn"-ও এই ধরনের)
+DIBS = "dibs"            # সঙ্গী "পরেরবার আমি" বলেছে
 CONFLICT = "conflict"     # দুজনেই একসাথে চালাচ্ছি
-KINDS = (FREE, CONFLICT)
-# dibs ও "your turn" টোস্ট Phase 14-এ যোগ হবে; limit টোস্ট বাদ (usage ফিচার কাটা)
+KINDS = (FREE, DIBS, CONFLICT)
+# limit টোস্ট নেই এবং থাকবেও না — usage ফিচার ২০২৬-১০-২০-এ কাটা হয়েছে
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,18 @@ def check(prev, cur, memory):
 
     # "It's free": সঙ্গীর working সত্য → মিথ্যা (techspec §9)। আমি নিজে কাজ করতে থাকলে চুপ থাকি —
     # তখন খবরটা কাজে লাগে না, আর "দুজনেই" অবস্থার টোস্ট আলাদা করে আছে।
+    # আমি dibs ডেকে রাখলে একই ঘটনায় অন্য কথা — "Your turn" (design §5)
     if prev.peer.working and not cur.peer.working and not cur.me.working:
-        out.append(Toast(FREE, "Claude is free", "%s just finished." % cur.peer.name))
+        if cur.me.wants_next:
+            out.append(Toast(FREE, "Your turn",
+                             "%s finished. You called dibs." % cur.peer.name))
+        else:
+            out.append(Toast(FREE, "Claude is free", "%s just finished." % cur.peer.name))
+
+    # সঙ্গী dibs ডেকেছে: মিথ্যা → সত্য, প্রতি transition-এ একবার (techspec §9)
+    if not prev.peer.wants_next and cur.peer.wants_next:
+        out.append(Toast(DIBS, "%s wants it next" % cur.peer.name,
+                         "They'll wait until you're done."))
 
     # দ্বন্দ্ব: দুজনেই কাজ করছি এবং তা ৩০ সেকেন্ডের বেশি টিকেছে — overlap-এ একবারই (appflow §9)
     if _track_conflict(cur, memory):

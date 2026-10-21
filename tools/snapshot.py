@@ -65,7 +65,7 @@ def _grab():
 
 
 def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_worked=0.0,
-                peer_offline=False, disconnected=False):
+                peer_offline=False, disconnected=False, my_dibs=False, peer_dibs=False):
     # কী করছে: deterministic একটি AppState বানিয়ে app._state-এ বসায় — নিজের since পিছিয়ে দিয়ে
     #           কার্ডে ঠিক "worked" সময় দেখায়, সঙ্গীর মান সরাসরি সেট করে
     # কেন লাগছে: Phase 10 থেকে প্যানেল state.snapshot() পড়ে (techspec §7), চরিত্রের কাউন্টার নয়
@@ -77,7 +77,10 @@ def _fake_state(me, samee_work=False, rifat_work=False, samee_worked=0.0, rifat_
     if my_working:
         st.set_working(True, FAKE_NOW - my_worked)    # now = FAKE_NOW → কার্ডে worked সেকেন্ড
     peer_working, peer_worked = both[peer]
-    st.set_peer(working=peer_working, today_seconds=int(peer_worked), online=not peer_offline)
+    if my_dibs:
+        st.set_dibs(True, FAKE_NOW)
+    st.set_peer(working=peer_working, today_seconds=int(peer_worked),
+                online=not peer_offline, wants_next=peer_dibs)
     st.set_connected(not disconnected)
     app._state = st
 
@@ -94,7 +97,7 @@ def _settle(samee_work, rifat_work, seconds=4.0):
 
 
 def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_worked=0.0,
-                  peer_offline=False, disconnected=False):
+                  peer_offline=False, disconnected=False, my_dibs=False, peer_dibs=False):
     # কী করছে: দুই রুম নির্দিষ্ট অবস্থায় থিতু করে, প্যানেলের --me সেট করে, কাজ-করা চরিত্রের কার্ড
     #           সময় deterministic করে (since পিছিয়ে), t সময়ে একটি ফ্রেম PNG-তে সেভ করে
     # কেন লাগছে: idle/work, প্যানেল, ও নির্দিষ্ট কার্ড-সময় (যেমন "1h 05m") যাচাই করতে
@@ -104,7 +107,8 @@ def render_single(out, samee, rifat, t, me="samee", samee_worked=0.0, rifat_work
                                                     # যেন FAKE_NOW-এই দিন সেট করে (নাহলে দিন mismatch-এ
                                                     # মধ্যরাত রিসেট since মুছে দেয়)
     _fake_state(me, samee == "work", rifat == "work", samee_worked, rifat_worked,
-                peer_offline=peer_offline, disconnected=disconnected)
+                peer_offline=peer_offline, disconnected=disconnected,
+                my_dibs=my_dibs, peer_dibs=peer_dibs)
     _setup_context()
     _settle(samee == "work", rifat == "work")
     app._fake_time = t
@@ -188,6 +192,10 @@ def main():
                         help="which user is running the app (panel/status wording)")
     parser.add_argument("--peer-offline", action="store_true",
                         help="draw the peer as offline (extra darkness + OFFLINE plaque)")
+    parser.add_argument("--my-dibs", action="store_true",
+                        help="I have called dibs (button pressed, bubble over my character)")
+    parser.add_argument("--peer-dibs", action="store_true",
+                        help="the peer has called dibs (their card shows next, bubble in their room)")
     parser.add_argument("--disconnected", action="store_true",
                         help="draw the panel's bottom line as offline - retrying")
     parser.add_argument("--samee-worked", type=float, default=0.0,
@@ -204,7 +212,8 @@ def main():
     else:
         render_single(args.out or "out.png", args.samee, args.rifat, args.t,
                       me=args.me, samee_worked=args.samee_worked, rifat_worked=args.rifat_worked,
-                      peer_offline=args.peer_offline, disconnected=args.disconnected)
+                      peer_offline=args.peer_offline, disconnected=args.disconnected,
+                      my_dibs=args.my_dibs, peer_dibs=args.peer_dibs)
 
     if _window is not None:
         _window.close()        # উইন্ডো বন্ধ করে পরিষ্কারভাবে বেরিয়ে যাই (আগে glutLeaveMainLoop ছিল)

@@ -28,6 +28,7 @@ from OpenGL.GLU import gluOrtho2D
 import pyglet
 from pyglet.event import EVENT_HANDLED
 from pyglet.window import key as pyglet_key
+from pyglet.window import mouse as pyglet_mouse
 
 import activity
 import alerts
@@ -39,11 +40,12 @@ import lighting
 import listener
 import panel
 import room
+import sprites
 import state
 import sync
 import tray
 import userconfig
-from pixel import draw_box, draw_rect, draw_text, hex_to_rgb, text_width
+from pixel import draw_box, draw_rect, draw_sprite, draw_text, hex_to_rgb, text_width
 
 TICK_SECONDS = 1.0 / 60.0         # অ্যানিমেশন টিকের ব্যবধান (আগের glutTimerFunc-এর ১৬ms)
 LABEL_FONT = font.BITMAP_9X15     # নাম লেবেলের ফন্ট
@@ -184,7 +186,18 @@ def init_scene(fb_w=config.WINDOW_W, fb_h=config.WINDOW_H):
     room.build_room_lists()
 
 
-def _draw_room(char, translate_x, mirror, warn=False, offline=False):
+def _draw_bubble(char, time_now):
+    # কী করছে: যে dibs ডেকেছে তার চরিত্রের মাথার উপরে speech bubble আঁকে, ১ Hz-এ ১px ওঠানামা
+    # কেন লাগছে: প্যানেলের বাইরেও চোখে পড়ুক যে ও পরেরবার চায় (design §3)
+    # real world-এ এটা কোথায় দেখা যায়: গেমে চরিত্রের মাথার উপরে status/quest আইকন
+    # নোট: রুমের transform-এর ভেতরে আঁকা, তাই Rifat-এর বাবল আয়নায় উল্টো — ছবি হওয়ায় তা চলে
+    x, y = char.position()
+    bob = -1 if (time_now % config.BUBBLE_BOB_SECONDS) < (config.BUBBLE_BOB_SECONDS / 2) else 0
+    draw_sprite(int(round(x)) + config.BUBBLE_DX, int(round(y)) + config.BUBBLE_DY + bob,
+                sprites.BUBBLE_DIBS, sprites.BUBBLE_DIBS_COLORS)
+
+
+def _draw_room(char, translate_x, mirror, warn=False, offline=False, dibs=False):
     # কী করছে: এক রুম আঁকছে design §8-এর স্তর ক্রমে — স্ট্যাটিক রুম → নিভানো স্ক্রিন/ল্যাম্প (ম্লান হবে) →
     #           চরিত্র → অন্ধকার overlay → glow → রশ্মি → স্ক্রিন আভা → জ্বলন্ত স্ক্রিন/ল্যাম্প (উজ্জ্বল, উপরে)
     #           → ডিবাগ overlay। সব এক push/pop matrix-এর ভেতরে (translate, Rifat হলে reflect)।
@@ -219,6 +232,10 @@ def _draw_room(char, translate_x, mirror, warn=False, offline=False):
         room.draw_screen(on=True)
     if char.lamp_on:
         room.draw_lamp_shade(on=True, warn=warn)          # দ্বন্দ্ব ব্লিঙ্ক ফ্রেমে warn=True → লাল
+
+    # dibs বাবল — আলোর স্তরের পরে, যাতে অন্ধকারে ম্লান না হয়ে পড়ে
+    if dibs:
+        _draw_bubble(char, anim_time())
 
     # সঙ্গী অফলাইন: পুরো রুমে বাড়তি অন্ধকার (design §3) — emissive-এর পরেও, যাতে স্ক্রিন/ল্যাম্পও ম্লান হয়
     if offline:
@@ -326,9 +343,11 @@ def display():
     warn = conflict and blink_on
 
     _draw_room(samee, config.SAMEE_ORIGIN[0], False, warn,
-               offline=not views["samee"].online)                        # translate(2, 2)
+               offline=not views["samee"].online,
+               dibs=views["samee"].wants_next)                           # translate(2, 2)
     _draw_room(rifat, config.RIFAT_ORIGIN[0] + config.ROOM_W, True, warn,
-               offline=not views["rifat"].online)       # translate(97+93, 2) + reflect
+               offline=not views["rifat"].online,
+               dibs=views["rifat"].wants_next)          # translate(97+93, 2) + reflect
 
     _draw_divider()
     _draw_frame()
@@ -391,7 +410,7 @@ def _push_status(now):
     if _sync is None:
         return
     _last_push = now
-    _sync.queue_status(sync.status_fields(_state.snapshot(now), now))
+    _sync.queue_status(sync.status_fields(_state.snapshot(now), now, _state.dibs_since()))
 
 
 def _apply_activity(now):
@@ -401,11 +420,14 @@ def _apply_activity(now):
     # real world-এ এটা কোথায় দেখা যায়: ডিটেকশনের ফল একটিই state store-এ লেখা, তারপর প্রচার
     rolled = _state.roll_day(now)              # মধ্যরাত (Dhaka) পেরোলে আজকের কাউন্টার ০
     changed = _state.set_working(_activity.tick(now), now)
+    expired = _state.expire_dibs(now)          # ২ ঘণ্টা পেরোনো dibs নিজে থেকে বাতিল (techspec §9)
     snap = _state.snapshot(now)
     if changed:
         print("WSR: working ->", snap.me.working)
+    if expired:
+        print("WSR: dibs expired")
     due = snap.me.working and (now - _last_push) >= config.PUSH_WHILE_WORKING
-    if changed or rolled or due:
+    if changed or rolled or expired or due:
         _push_status(now)
 
 
@@ -454,6 +476,8 @@ def _pump(dt):
             show_window()
         elif command == tray.HIDE:
             hide_window()
+        elif command == tray.DIBS:
+            toggle_dibs()
         elif command == tray.QUIT:
             quit_app()
 
@@ -538,6 +562,33 @@ def _inject(event_name):
     print("WSR: dev inject", event_name)
 
 
+def toggle_dibs():
+    # কী করছে: নিজের dibs উল্টে দেয় (ডাকা/বাতিল) ও সাথে সাথে সার্ভারে পুশ করে
+    # কেন লাগছে: প্যানেলের বাটন ও ট্রে মেনু — দুটোই এখান দিয়ে যায়, তাই নিয়ম এক জায়গায়
+    # real world-এ এটা কোথায় দেখা যায়: এক action, একাধিক entry point (বাটন, মেনু, শর্টকাট)
+    now = wall_now()
+    snap = _state.snapshot(now)
+    if not panel.dibs_visible(snap) and not snap.me.wants_next:
+        return False                      # সঙ্গী কাজ করছে না — ডাকার কিছু নেই (বাতিল করা যায়)
+    if _state.set_dibs(not snap.me.wants_next, now):
+        print("WSR: dibs ->", _state.snapshot(now).me.wants_next)
+        _push_status(now)
+        return True
+    return False
+
+
+def on_mouse_press(mx, my, button, modifiers):
+    # কী করছে: বাঁ-বোতাম চাপলে মাউস অবস্থানকে গ্রিডে বদলে dibs বাটনে পড়েছে কিনা দেখে; পড়লে টগল করে
+    # কেন লাগছে: প্যানেলের একমাত্র ক্লিকযোগ্য কন্ট্রোল এখন dibs বাটন (design §2.3)
+    # real world-এ এটা কোথায় দেখা যায়: UI-তে বাটন ক্লিক → hit-test → action
+    # নোট: pyglet-এর মাউস y নিচ-থেকে বাড়ে, আমাদের গ্রিড উপর-থেকে — তাই উচ্চতা থেকে বিয়োগ
+    if button != pyglet_mouse.LEFT:
+        return
+    gx, gy = panel.screen_to_grid(mx, _window.height - my)
+    if panel.dibs_hit(gx, gy):
+        toggle_dibs()
+
+
 def on_key_press(symbol, modifiers):
     # কী করছে: ESC → বন্ধ; '1'/'2' → (--dev হলে) নকল prompt / session end; 'D' → ডিবাগ overlay,
     #           'G' → শুধু গ্রিড টগল
@@ -575,10 +626,10 @@ def make_window(visible=True):
         config=gl_config,
     )
     # হ্যান্ডলার সরাসরি বসাই — pyglet-এর ডিফল্ট on_close/on_key_press যেন না চলে
-    # মাউস হ্যান্ডলার আর নেই: টগল বাদ (Phase 10), আর dibs বাটন আসবে Phase 14-এ
     win.on_draw = display
     win.on_close = on_close
     win.on_key_press = on_key_press
+    win.on_mouse_press = on_mouse_press      # dibs বাটনের ক্লিক (Phase 14)
     return win
 
 
@@ -638,7 +689,8 @@ def main():
     _window = make_window(visible=not args.tray)      # উইন্ডো + GL কনটেক্সট (এখন GLUT নয়, pyglet)
     init_scene(*_window.get_framebuffer_size())       # প্রজেকশন/blending + display list তৈরি
 
-    _tray = tray.Tray(_commands, settings_store=_alert_settings)
+    _tray = tray.Tray(_commands, settings_store=_alert_settings,
+                      snapshot_fn=lambda: _state.snapshot())
     _tray.start()                                     # নিজের থ্রেডে; উইন্ডো ছোঁয় না (techspec §3)
 
     if not args.tray:                                 # লুকিয়ে শুরু হলে অ্যানিমেশন টিক লাগে না

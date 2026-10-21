@@ -16,12 +16,17 @@ import state
 T0 = 1_700_000_000.0
 
 
-def snap(now, me_working=False, peer_working=False, peer_online=True, connected=True):
+def snap(now, me_working=False, peer_working=False, peer_online=True, connected=True,
+         me_dibs=False, peer_dibs=False):
     # কী করছে: চাওয়া অবস্থায় একটি StateSnapshot বানায় (me = samee, peer = rifat)
     # কেন লাগছে: alerts শুধু দুটি snapshot তুলনা করে — তাই টেস্টে হাতে বানানোই যথেষ্ট
     app = state.AppState("samee", "rifat", now)
-    app.set_working(me_working, now)
-    app.set_peer(working=peer_working, online=peer_online)
+    if me_dibs:
+        app.set_dibs(True, now)
+    app.set_working(me_working, now)      # কাজ শুরু করলে dibs আপনিই যায় — ক্রমটা তাই গুরুত্বপূর্ণ
+    if me_dibs and not me_working:
+        app.set_dibs(True, now)
+    app.set_peer(working=peer_working, online=peer_online, wants_next=peer_dibs)
     app.set_connected(connected)
     return app.snapshot(now)
 
@@ -146,6 +151,45 @@ def test_conflict_timer_starts_even_on_the_first_snapshot():
                               late, memory)) == [alerts.CONFLICT]
 
 
-def test_only_free_and_conflict_exist():
-    # usage ফিচার কাটা — limit টোস্ট যেন কখনো ফিরে না আসে
-    assert alerts.KINDS == (alerts.FREE, alerts.CONFLICT)
+def test_the_kind_list_is_exactly_these_three():
+    # usage ফিচার কাটা — "limits" যেন কখনো ফিরে না আসে
+    assert alerts.KINDS == (alerts.FREE, alerts.DIBS, alerts.CONFLICT)
+    assert "limits" not in alerts.KINDS
+
+
+# ---------------- dibs (Phase 14) ----------------
+
+def test_peer_calling_dibs_fires_once():
+    memory = alerts.Memory()
+    before = snap(T0, me_working=True)
+    after = snap(T0 + 1, me_working=True, peer_dibs=True)
+    toasts = alerts.check(before, after, memory)
+    assert kinds(toasts) == [alerts.DIBS]
+    assert toasts[0].title == "Rifat wants it next"
+    assert toasts[0].body == "They'll wait until you're done."
+    still = snap(T0 + 2, me_working=True, peer_dibs=True)
+    assert alerts.check(after, still, memory) == []       # dibs ঝুলে আছে — আবার বাজবে না
+
+
+def test_peer_dropping_dibs_is_silent():
+    memory = alerts.Memory()
+    before = snap(T0, me_working=True, peer_dibs=True)
+    after = snap(T0 + 1, me_working=True, peer_dibs=False)
+    assert alerts.check(before, after, memory) == []
+
+
+def test_your_turn_replaces_the_plain_free_toast():
+    memory = alerts.Memory()
+    before = snap(T0, peer_working=True, me_dibs=True)
+    after = snap(T0 + 1, peer_working=False, me_dibs=True)
+    toasts = alerts.check(before, after, memory)
+    assert kinds(toasts) == [alerts.FREE]                  # একই kind, তাই একই on/off সেটিং
+    assert toasts[0].title == "Your turn"
+    assert toasts[0].body == "Rifat finished. You called dibs."
+
+
+def test_without_dibs_it_is_the_plain_free_toast():
+    memory = alerts.Memory()
+    before = snap(T0, peer_working=True)
+    after = snap(T0 + 1, peer_working=False)
+    assert alerts.check(before, after, memory)[0].title == "Claude is free"

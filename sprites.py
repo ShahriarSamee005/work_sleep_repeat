@@ -140,6 +140,25 @@ SUN_COLORS = {
     "#": config.SUN_EDGE,
 }
 
+# BUBBLE_DIBS (11×9) — যে dibs ডেকেছে তার মাথার উপরে ছোট speech bubble + তোলা হাত (design §3)
+# 'B' = বাবলের ভেতর, '#' = OUTLINE, 'H' = হাতের রঙ
+BUBBLE_DIBS = [
+    ".#########.",
+    "#BBBBBBBBB#",
+    "#BHBHBHBBB#",    # তিনটি আঙুল
+    "#BHHHHHHBB#",
+    "#HHHHHHHHB#",    # বাঁয়ে বুড়ো আঙুল
+    "#HHHHHHHBB#",
+    "#BHHHHHBBB#",
+    "#BBBBBBBB#.",
+    ".##.##.....",    # বাবলের লেজ (চরিত্রের দিকে)
+]
+BUBBLE_DIBS_COLORS = {
+    "B": config.BUBBLE_BG,
+    "H": config.OUTLINE,   # হাত গাঢ় silhouette — এই মাপে সেটিই সবচেয়ে স্পষ্ট পড়া যায়
+    "#": config.OUTLINE,
+}
+
 # ---- ট্রে আইকন (design §4) — ১৬×১৬ গ্রিড; tray.py রান-টাইমে ছবি বানায় (কোনো ফাইল শিপ করি না) ----
 
 # TRAY_MOON (16×16) — কেউ কাজ করছে না; 'Y' = MOON_LIGHT, '#' = MOON_EDGE

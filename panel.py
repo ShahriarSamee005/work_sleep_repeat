@@ -49,6 +49,37 @@ def _draw_icon(any_working):
         draw_sprite(*config.PANEL_ICON_POS, sprites.MOON, sprites.MOON_COLORS)
 
 
+def dibs_visible(snap):
+    # কী করছে: dibs বাটন এখন দেখানো উচিত কিনা বলে — শুধু সঙ্গী কাজ করলে (design §2.3)
+    # কেন লাগছে: কেউ না চালালে "পরেরবার আমি" বলার মানে নেই; বাটন তখন জায়গা নষ্ট করে
+    # real world-এ এটা কোথায় দেখা যায়: প্রসঙ্গ অনুযায়ী কন্ট্রোল দেখানো/লুকানো
+    return snap.peer.working
+
+
+def dibs_hit(gx, gy):
+    # কী করছে: গ্রিড বিন্দু (gx,gy) dibs বাটনের ভেতরে কিনা বলে
+    # কেন লাগছে: ক্লিক বাটনে পড়েছে কিনা জানতে (আগের টগলের মতোই hit-test)
+    # real world-এ এটা কোথায় দেখা যায়: bounding box hit test
+    x, y, w, h = config.DIBS_BOX
+    return x <= gx < x + w and y <= gy < y + h
+
+
+def _draw_dibs(snap):
+    # কী করছে: dibs বাটন আঁকে — ডাকা না থাকলে "Call dibs", ডেকে থাকলে চাপা রূপে "Waiting — cancel"
+    # কেন লাগছে: design §2.3-এর দুটি সক্রিয় অবস্থা; সঙ্গী ডাকলে বাটন নয়, তার কার্ডে চিহ্ন বসে
+    # real world-এ এটা কোথায় দেখা যায়: toggle বাটনের pressed/unpressed রূপ
+    if not dibs_visible(snap):
+        return                                         # কেউ কাজ করছে না → বাটন নেই
+    x, y, w, h = config.DIBS_BOX
+    mine = snap.me.wants_next
+    fill = config.ACCENT if mine else config.PANEL_CARD
+    border = config.ACCENT if mine else config.PANEL_BORDER
+    text = ("Waiting " + DASH + " cancel") if mine else "Call dibs"
+    color = config.OUTLINE if mine else config.TEXT    # চাপা অবস্থায় গাঢ় লেখা, নাহলে হালকা
+    draw_box(x, y, w, h, fill, outline=border)
+    _draw_centered(config.PANEL_CENTER_X, y + config.DIBS_LABEL_DY, text, color)
+
+
 def _draw_card(box, view):
     # কী করছে: এক টাইম কার্ড আঁকে — কাজ করলে PANEL_CARD_ACTIVE + ACCENT বর্ডার, নাহলে PANEL_CARD;
     #           বাঁয়ে online ডট, উপরে "Name today", নিচে format_time (কাজ করলে GOLD)
@@ -62,6 +93,10 @@ def _draw_card(box, view):
     dx, dy, dw, dh = config.CARD_DOT                 # online ডট (design §2.4)
     draw_rect(x + dx, y + dy, dw, dh,
               config.ONLINE_GREEN if view.online else config.OFFLINE_GREY)
+
+    if view.wants_next:                              # এই জন পরেরবার চায় (design §2.3)
+        draw_text(x + config.CARD_NEXT_DX, y + config.CARD_NAME_DY, "next",
+                  config.ACCENT, PANEL_FONT)
 
     _draw_centered(config.PANEL_CENTER_X, y + config.CARD_NAME_DY,
                    view.name + " today", config.TEXT_MUTED)
@@ -113,8 +148,8 @@ def draw_panel(snap):
     sub = "Ask before you start" if any_w else "Nobody is working"
     _draw_centered(config.PANEL_CENTER_X, config.PANEL_SUB_Y, sub, config.TEXT_DIM)
 
-    # টগলের জায়গা (y 44–60) এখন ফাঁকা — টগল বাদ, কারণ status এখন হুক থেকে আসে (design §2)।
-    # Phase 14-এ এখানেই "Call dibs" বাটন বসবে; তাই config-এর TOGGLE_* মাপগুলো রেখে দেওয়া হলো।
+    # dibs বাটন (design §2.3) — Phase 10-এ বাদ দেওয়া টগলের জায়গাতেই; সঙ্গী কাজ না করলে দেখা যায় না
+    _draw_dibs(snap)
 
     # দুই টাইম কার্ড — বাঁয়ে সবসময় Samee, ডানে Rifat (কে অ্যাপ চালাচ্ছে তা নির্বিশেষে)
     _draw_card(config.CARD1_BOX, views["samee"])

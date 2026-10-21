@@ -13,6 +13,7 @@ import sprites
 SHOW = "show"
 HIDE = "hide"
 QUIT = "quit"
+DIBS = "dibs"      # "পরেরবার আমি" টগল — main থ্রেড প্রয়োগ করে
 
 # আইকনের অবস্থা (design §4)
 FREE = "free"
@@ -90,13 +91,14 @@ def icon_state(snap):
 
 
 class Tray:
-    def __init__(self, commands, settings_store=None, status_fn=None):
+    def __init__(self, commands, settings_store=None, status_fn=None, snapshot_fn=None):
         # কী করছে: ট্রে আইকন ও মেনু তৈরি করে; সব উইন্ডো-অ্যাকশন commands কিউতে পাঠায়
         # কেন লাগছে: pystray নিজের থ্রেডে চলে — সেখান থেকে pyglet উইন্ডো ছোঁয়া নিষেধ (techspec §3)
         # real world-এ এটা কোথায় দেখা যায়: UI থ্রেড ও ট্রে/ব্যাকগ্রাউন্ড থ্রেডের মাঝে message passing
         self.commands = commands
         self.settings = settings_store          # alerts চালু/বন্ধ রাখে ও সেভ করে (userconfig)
         self.status_fn = status_fn or (lambda: config.WINDOW_TITLE)
+        self.snapshot_fn = snapshot_fn          # মেনু খোলার সময় dibs আইটেমের রূপ ঠিক করতে
         self.icons = build_icons()
         self._state = None
         self._title = None
@@ -108,7 +110,8 @@ class Tray:
     def _menu(self):
         alert_items = [
             pystray.MenuItem(label, self._toggle(kind), checked=self._checked(kind))
-            for kind, label in (("free", "It's free"), ("conflict", "Both working"))
+            for kind, label in (("free", "It's free"), ("dibs", "Someone wants it next"),
+                                ("conflict", "Both working"))
         ]
         integration = pystray.Menu(
             pystray.MenuItem("Reinstall hooks", self._hooks(claude_settings.install)),
@@ -118,14 +121,32 @@ class Tray:
             pystray.MenuItem("Open rooms", self._send(SHOW), default=True),
             pystray.MenuItem("Hide window", self._send(HIDE)),
             pystray.Menu.SEPARATOR,
-            # dibs ও autostart পরের ফেজে (১৪ ও ১৫) — এখন নিষ্ক্রিয় প্লেসহোল্ডার
-            pystray.MenuItem("Call dibs", None, enabled=False),
-            pystray.MenuItem("Start with Windows", None, enabled=False),
+            # dibs: লেখা ও সক্রিয়তা মেনু খোলার সময় ঠিক হয় (প্যানেলের বাটনের মতোই নিয়ম)
+            pystray.MenuItem(self._dibs_label, self._send(DIBS), enabled=self._dibs_enabled),
+            pystray.MenuItem("Start with Windows", None, enabled=False),   # Phase 15
             pystray.MenuItem("Alerts", pystray.Menu(*alert_items)),
             pystray.MenuItem("Claude Code integration", integration),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._send(QUIT)),
         )
+
+    def _snapshot(self):
+        try:
+            return self.snapshot_fn() if self.snapshot_fn is not None else None
+        except Exception:
+            return None
+
+    def _dibs_label(self, item=None):
+        # কী করছে: মেনু খোলার সময় dibs আইটেমের লেখা বেছে নেয় (ডাকা থাকলে "Cancel dibs")
+        # কেন লাগছে: ট্রে আইটেম প্যানেলের বাটনের আয়না হতে হবে (Phase 14 gate)
+        # real world-এ এটা কোথায় দেখা যায়: state অনুযায়ী মেনুর লেখা বদলানো
+        snap = self._snapshot()
+        return "Cancel dibs" if (snap is not None and snap.me.wants_next) else "Call dibs"
+
+    def _dibs_enabled(self, item=None):
+        # সঙ্গী কাজ করলে ডাকা যায়; আর নিজের dibs চালু থাকলে বাতিল করা সবসময়ই যায়
+        snap = self._snapshot()
+        return bool(snap is not None and (snap.peer.working or snap.me.wants_next))
 
     def _send(self, command):
         def handler(icon=None, item=None):

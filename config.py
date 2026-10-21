@@ -76,9 +76,10 @@ APP_VERSION = "2.0-phase13"     # সার্ভারে app_version ফিল
 
 # ট্রে ও অ্যালার্ট (techspec §9 / design §4–5; Phase 13)
 CONFLICT_AFTER = 30             # দুজনে একসাথে এত সেকেন্ড কাজ করলে তবেই দ্বন্দ্বের টোস্ট (appflow §9)
+DIBS_EXPIRE = 2 * 3600          # dibs এতক্ষণ পর নিজে থেকেই বাতিল হয় (techspec §9)
 TRAY_ICON_PX = 32               # ট্রে আইকনের মাপ (১৬×১৬ গ্রিড ২× করে আঁকা হয়)
 PUMP_SECONDS = 0.1              # ট্রে কমান্ড ও হুক ইভেন্ট কত ঘন ঘন নেওয়া হয় (উইন্ডো লুকানো থাকলেও)
-ALERTS_DEFAULT = {"free": True, "conflict": True}   # কোন টোস্ট চালু (config.json-এ সেভ হয়)
+ALERTS_DEFAULT = {"free": True, "dibs": True, "conflict": True}   # কোন টোস্ট চালু (config.json-এ)
 TIMEZONE = "Asia/Dhaka"        # দিন হিসাবের টাইমজোন
 TZ_OFFSET_SECONDS = 6 * 3600   # Asia/Dhaka = UTC+6 (DST নেই); দিন-নম্বর বের করতে UTC-তে যোগ করি
 TIME_SCALE = 1.0               # সময় দ্রুত করার গুণক (কার্ড/মধ্যরাত রিসেট টেস্টে বাড়াই; ডিফল্ট বাস্তব গতি)
@@ -181,6 +182,7 @@ TEXT = "#f1e9dd"             # সাধারণ টেক্সট
 TEXT_MUTED = "#d9cbb8"       # হালকা টেক্সট
 TEXT_DIM = "#a99bb5"         # আরও ম্লান টেক্সট
 GOLD = "#ffd27a"            # সক্রিয় সময়, কাজের সময়ের স্ট্যাটাস
+BUBBLE_BG = "#f1e9dd"        # dibs বাবলের ভেতরের রঙ (design §3) — TEXT-এর মতো হালকা
 ONLINE_GREEN = "#7fc29b"     # অনলাইন ডট (design §2.4) — রাতের প্যালেটের সাথে মেলে, কম saturation
 OFFLINE_GREY = "#7a86a0"     # অফলাইন লেখা ও ডট — দেয়ালের নীলচে-ধূসর পরিবারের (design §8)
 
@@ -369,10 +371,16 @@ PANEL_TITLE_Y = 24               # "CLAUDE STATUS" baseline
 PANEL_STATUS_Y = 32              # স্ট্যাটাস লাইন baseline
 PANEL_SUB_Y = 39                 # সাব-স্ট্যাটাস লাইন baseline
 
-TOGGLE_BOX = (204, 44, 24, 10)   # টগল বাক্স (x, y, w, h)
-TOGGLE_KNOB_W = 8                # টগল knob-এর প্রস্থ
-TOGGLE_KNOB_PAD = 1              # knob ও বাক্সের কিনারার ফাঁক
-TOGGLE_LABEL_Y = 60              # "Sleeping"/"Working" baseline
+# dibs বাটন (design §2.3) — Phase 10-এর বাদ দেওয়া টগলের জায়গাতেই বসে
+DIBS_BOX = (198, 44, 36, 11)     # বাটনের বাক্স (x, y, w, h); কেন্দ্র PANEL_CENTER_X-এ
+DIBS_LABEL_DY = 8                # বাক্সের y থেকে লেখার baseline offset
+CARD_NEXT_DX = 29                # সঙ্গীর কার্ডে "next" চিহ্নের x offset (কার্ড x থেকে)
+
+# dibs বাবল (design §3) — চরিত্রের মাথার উপরে; রুম-লোকাল offset
+BUBBLE_DX = 14                   # চরিত্রের x থেকে বাবলের বাঁ কিনারা (ডানে, যাতে বিছানার
+                                 # হেডবোর্ডের উপরে না পড়ে)
+BUBBLE_DY = -10                  # চরিত্রের y থেকে বাবলের উপরের কিনারা
+BUBBLE_BOB_SECONDS = 1.0         # ১ Hz মৃদু ওঠানামা (ব্লিঙ্ক নয়)
 
 CARD1_BOX = (196, 62, 40, 12)    # Samee টাইম কার্ড (Phase 11-এ ৪ সারি উপরে — নিচে লাইনের জায়গা)
 CARD2_BOX = (196, 77, 40, 12)    # Rifat টাইম কার্ড
