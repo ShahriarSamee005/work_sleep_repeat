@@ -51,18 +51,6 @@ SCREEN_GLOW_CENTER = (61, 9)    # মনিটরের কেন্দ্রে
 SCREEN_GLOW_RADIUS = 9          # ছোট বৃত্তের ব্যাসার্ধ
 SCREEN_GLOW_ALPHA = 0.12        # নীল আভার alpha (কম)
 
-# ডিবাগ ভিউ (design §11) — key D পুরো overlay, key G শুধু গ্রিড
-# রঙগুলো শুধু ডিবাগের জন্য (দৃশ্যের অংশ নয়); লাল = কাটার আগে, সবুজ = কাটার পরে
-GRID_STEP = 8                   # গ্রিড লাইন প্রতি ৮ পিক্সেলে
-DEBUG_BEZIER_STEPS = 40         # Bezier বক্ররেখা আঁকতে কত ভাগে নমুনা
-DEBUG_GRID = "#5a6781"          # ম্লান গ্রিড লাইন
-DEBUG_GRID_ALPHA = 0.30         # গ্রিড লাইনের স্বচ্ছতা
-DEBUG_BEZIER = "#ffd27a"        # Bezier বক্ররেখার রঙ
-DEBUG_CTRL = "#e0484f"          # ৪টি কন্ট্রোল পয়েন্টের রঙ
-DEBUG_CLIP = "#8fd0ff"          # রুমের clip rectangle-এর রঙ
-DEBUG_RAY_UNCLIPPED = "#ff3b3b"  # রশ্মি কাটার আগে (লাল) — ডিভাইডার পেরিয়ে যেত
-DEBUG_RAY_CLIPPED = "#3bff6a"    # রশ্মি কাটার পরে (সবুজ) — রুমের প্রান্তে থামে
-
 # সিংক ও সময় হিসাব (techspec §6.4 / appflow §6, §10–12)
 POLL_INTERVAL = 2.0             # Supabase পোল করার বিরতি (সেকেন্ড; techspec §6.4)
 SYNC_TIMEOUT = 5.0              # Supabase HTTP টাইমআউট (সেকেন্ড) — লোকাল HTTP_TIMEOUT আলাদা

@@ -49,14 +49,10 @@ from pixel import draw_box, draw_rect, draw_sprite, draw_text, hex_to_rgb, text_
 
 TICK_SECONDS = 1.0 / 60.0         # অ্যানিমেশন টিকের ব্যবধান (আগের glutTimerFunc-এর ১৬ms)
 LABEL_FONT = font.BITMAP_9X15     # নাম লেবেলের ফন্ট
-DEBUG_FONT = font.BITMAP_8X13     # ডিবাগ লেবেলের ছোট ফন্ট
+SMALL_FONT = font.BITMAP_8X13
 
 # অ্যাপের একমাত্র উইন্ডো — main() তৈরি করে; হ্যান্ডলারগুলো এটি দিয়ে উচ্চতা/দৃশ্যমানতা দেখে
 _window = None
-
-# ডিবাগ ভিউ state (design §11): D → পুরো overlay, G → শুধু গ্রিড। snapshot টুল _debug সেট করতে পারে।
-_debug = False
-_grid = False
 
 # দুই ক্যারেক্টার — সব per-user state এখন এখানে (Phase 5-এর গ্লোবাল বুলিয়ান বাদ)
 samee = character.Character("samee")
@@ -101,11 +97,6 @@ def wall_now():
         return _fake_wall
     return _wall_start + (time.time() - _wall_start) * config.TIME_SCALE
 
-# FPS কাউন্টার state (Phase 10-এ পুরো কাউন্টার সরিয়ে ফেলব)
-_fps_count = 0
-_fps_t0 = None
-
-
 def anim_time():
     # কী করছে: অ্যানিমেশনের বর্তমান সময় (সেকেন্ড) দেয় — _fake_time সেট থাকলে সেটি, নাহলে বাস্তব সময়
     # কেন লাগছে: টাইপিং frame সময়ের উপর নির্ভর করে; snapshot টুল নির্দিষ্ট সময়ের ছবি নিতে সময় ফ্রিজ করে
@@ -140,7 +131,7 @@ def parse_args():
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="dev mode: keys 1/2 inject fake hook events, FPS in the debug view",
+        help="dev mode: keys 1/2 inject fake hook events",
     )
     parser.add_argument(
         "--port",
@@ -222,8 +213,7 @@ def _draw_room(char, translate_x, mirror, warn=False, offline=False, dibs=False)
     lighting.draw_darkness(lit)
     if char.lamp_on:
         lighting.draw_glow()
-        if not _debug:                                    # ডিবাগে রশ্মি লাল/সবুজে আলাদা আঁকা হবে
-            lighting.draw_rays(debug=False)
+        lighting.draw_rays()
     if char.monitor_on:
         lighting.draw_screen_glow()
 
@@ -240,13 +230,6 @@ def _draw_room(char, translate_x, mirror, warn=False, offline=False, dibs=False)
     # সঙ্গী অফলাইন: পুরো রুমে বাড়তি অন্ধকার (design §3) — emissive-এর পরেও, যাতে স্ক্রিন/ল্যাম্পও ম্লান হয়
     if offline:
         lighting.draw_offline()
-
-    # ডিবাগ overlay (দুই রুমেই, matrix-এর ভেতরে যাতে transform মেলে; text লেবেল বাইরে আঁকা হয়)
-    if _debug:
-        lighting.draw_rays(debug=True)                    # লাল (কাটার আগে) + সবুজ (কাটার পরে)
-        lighting.draw_debug(grid_only=False)              # গ্রিড + clip rect + Bezier + কন্ট্রোল পয়েন্ট
-    elif _grid:
-        lighting.draw_debug(grid_only=True)               # শুধু গ্রিড
 
     glPopMatrix()
 
@@ -306,21 +289,7 @@ def _draw_plaques(views):
         cx = (ox + config.ROOM_W - config.PLAQUE_CX) if flip else (ox + config.PLAQUE_CX)
         draw_box(bx, oy + py, pw, ph, config.NIGHT, outline=config.OFFLINE_GREY)
         _draw_centered_text(cx, oy + config.PLAQUE_Y, "OFFLINE",
-                            config.OFFLINE_GREY, DEBUG_FONT)
-
-
-def _draw_debug_labels():
-    # কী করছে: ডিবাগ text — Samee-র ৪টি কন্ট্রোল পয়েন্টের নাম (P0..P3) ও নিচে ছোট legend আঁকে,
-    #           সব গ্লোবাল কোঅর্ডিনেটে (mirror matrix-এর বাইরে)
-    # কেন লাগছে: mirror matrix-এর ভেতরে text আঁকলে আয়নার মতো উল্টো হতো; তাই লেবেল বাইরে গ্লোবালে
-    # real world-এ এটা কোথায় দেখা যায়: ডিবাগ HUD — জ্যামিতি transform-এ থাকলেও লেবেল সবসময় সোজা
-    ox, oy = config.SAMEE_ORIGIN
-    points = (config.WALK_P0, config.WALK_P1, config.WALK_P2, config.WALK_P3)
-    for i, (px, py) in enumerate(points):                 # Samee: গ্লোবাল = লোকাল + origin
-        draw_text(ox + px + 2, oy + py, "P%d" % i, config.DEBUG_CTRL, DEBUG_FONT)
-    draw_text(config.SAMEE_ORIGIN[0], config.GRID_H - 3,
-              "D=debug  G=grid   red=unclipped  green=clipped",
-              config.TEXT, DEBUG_FONT)
+                            config.OFFLINE_GREY, SMALL_FONT)
 
 
 def display():
@@ -356,29 +325,6 @@ def display():
 
     # প্যানেল (design §2) — পুরো snapshot দিই; প্যানেল শুধু সেটিই পড়ে, লক ধরে না
     panel.draw_panel(snap)
-
-    if _debug:
-        _draw_debug_labels()   # ডিবাগ text-ও mirror matrix-এর বাইরে
-
-    _tick_fps()
-
-
-def _tick_fps():
-    # কী করছে: প্রতি ফ্রেম গুনে সেকেন্ডে একবার FPS কনসোলে ছাপে — শুধু ডিবাগ ভিউতে (appflow §15)
-    # কেন লাগছে: display list ঠিকমতো কাজ করছে ও রেন্ডার যথেষ্ট দ্রুত কিনা তা যাচাই করতে;
-    #           স্বাভাবিক রানে কনসোল পরিষ্কার থাকে, তাই ডিটেকশনের লাইনগুলো চোখে পড়ে
-    # real world-এ এটা কোথায় দেখা যায়: গেমের performance HUD — ডিবাগ বিল্ডে/ভিউতে দেখানো
-    global _fps_count, _fps_t0
-    if not _debug:
-        return
-    now = time.perf_counter()
-    if _fps_t0 is None:
-        _fps_t0 = now
-    _fps_count += 1
-    if now - _fps_t0 >= 1.0:
-        print("FPS:", _fps_count)
-        _fps_count = 0
-        _fps_t0 = now
 
 
 def _views(snap):
@@ -596,17 +542,12 @@ def on_key_press(symbol, modifiers):
     # real world-এ এটা কোথায় দেখা যায়: ডিবাগ কী ও ডেভ-মোড ইভেন্ট ইনজেকশন
     # নোট: ESC-ও request_close() দিয়েই যায় (pyglet-এর ডিফল্ট ESC হ্যান্ডলার নয়), তাই
     #      Phase 13-এ X ও ESC একসাথে "hide to tray" হবে (appflow §13)
-    global _debug, _grid
     if symbol == pyglet_key.ESCAPE:
         request_close()
     elif symbol in (pyglet_key._1, pyglet_key.NUM_1):
         _inject("UserPromptSubmit")      # --dev ছাড়া কিছুই হয় না
     elif symbol in (pyglet_key._2, pyglet_key.NUM_2):
         _inject("SessionEnd")
-    elif symbol == pyglet_key.D:
-        _debug = not _debug       # পুরো ডিবাগ overlay (গ্রিডও দেখায়)
-    elif symbol == pyglet_key.G:
-        _grid = not _grid         # শুধু গ্রিড লাইন
     return EVENT_HANDLED
 
 

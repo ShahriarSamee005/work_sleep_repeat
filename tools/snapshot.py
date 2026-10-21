@@ -186,8 +186,6 @@ def main():
     parser.add_argument("--frames", help="comma-separated seconds, e.g. 0,0.2,0.6,1.2")
     parser.add_argument("--start", choices=("idle", "work"), default="idle",
                         help="contact-sheet starting state before the t=0 toggle")
-    parser.add_argument("--debug", action="store_true",
-                        help="turn on the debug overlay (grid, Bezier, clip rects, red/green rays)")
     parser.add_argument("--me", choices=("samee", "rifat"), default="samee",
                         help="which user is running the app (panel/status wording)")
     parser.add_argument("--peer-offline", action="store_true",
@@ -203,8 +201,6 @@ def main():
     parser.add_argument("--rifat-worked", type=float, default=0.0,
                         help="seconds to show on Rifat's card when Rifat is working")
     args = parser.parse_args()
-
-    app._debug = args.debug   # ডিবাগ overlay চালু/বন্ধ (main-এর module global সেট করছি)
 
     if args.sheet:
         frames = [float(x) for x in args.frames.split(",")] if args.frames else [0.0]

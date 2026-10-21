@@ -4,13 +4,10 @@ from OpenGL.GL import (
     glBegin,
     glEnd,
     glVertex2f,
-    GL_LINE_LOOP,
-    GL_LINE_STRIP,
-    GL_LINES,
     GL_QUADS,
 )
 
-from algorithms import bezier_points, bresenham_line, cohen_sutherland, scanline_circle
+from algorithms import bresenham_line, cohen_sutherland, scanline_circle
 from pixel import draw_rect, set_color
 
 import config
@@ -103,100 +100,14 @@ def _draw_ray_cells(x0, y0, x1, y1):
         _emit_span(cy, cx, cx)     # এক ঘর = ১×১ quad
 
 
-def draw_rays(debug=False):
-    # কী করছে: ল্যাম্পের রশ্মিগুলো cohen_sutherland দিয়ে রুমে কেটে bresenham-এ আঁকে;
-    #           debug হলে কাটার আগেরটা লাল ও কাটার পরেরটা সবুজে, নাহলে উষ্ণ রঙে কম alpha-য়
-    # কেন লাগছে: না কাটলে আলো দেয়াল পেরিয়ে অন্যজনের রুমে যেত; debug-এ ক্লিপিং চোখে দেখানো যায়
-    # real world-এ এটা কোথায় দেখা যায়: GPU pipeline-এ viewport-এর বাইরের রেখা ক্লিপ করা
+def draw_rays():
     rays = _ray_endpoints()
     rect = config.ROOM_CLIP_RECT
-
-    if debug:
-        # আগে পুরো (unclipped) রশ্মি লাল রঙে — রুম ছাড়িয়ে ডিভাইডার পেরিয়ে যায়
-        set_color(config.DEBUG_RAY_UNCLIPPED)
-        glBegin(GL_QUADS)
-        for x0, y0, x1, y1 in rays:
-            _draw_ray_cells(x0, y0, x1, y1)
-        glEnd()
-        # তারপর কাটা (clipped) অংশ সবুজে উপরে — রুমের প্রান্তে থামে (লালের ভেতরের অংশ ঢেকে দেয়)
-        set_color(config.DEBUG_RAY_CLIPPED)
-        glBegin(GL_QUADS)
-        for x0, y0, x1, y1 in rays:
-            clip = cohen_sutherland(x0, y0, x1, y1, rect)
-            if clip is None:                 # পুরো রশ্মি রুমের বাইরে হলে বাদ
-                continue
-            _draw_ray_cells(*clip)
-        glEnd()
-    else:
-        # স্বাভাবিক দৃশ্য: শুধু কাটা অংশ উষ্ণ রঙে হালকা alpha-য়
-        set_color(config.GLOW_WARM, config.RAY_ALPHA)
-        glBegin(GL_QUADS)
-        for x0, y0, x1, y1 in rays:
-            clip = cohen_sutherland(x0, y0, x1, y1, rect)
-            if clip is None:
-                continue
-            _draw_ray_cells(*clip)
-        glEnd()
-
-
-# ডিবাগ ভিউ (design §11): গ্রিড, Bezier বক্ররেখা + কন্ট্রোল পয়েন্ট, clip rectangle
-# (রশ্মির লাল/সবুজ অংশ draw_rays(debug=True) আলাদাভাবে আঁকে)
-
-def _draw_grid():
-    # কী করছে: রুম জুড়ে প্রতি GRID_STEP পিক্সেলে ম্লান উল্লম্ব ও অনুভূমিক লাইন আঁকে
-    # কেন লাগছে: viva-তে কোঅর্ডিনেট/মাপ বোঝাতে গ্রিড সাহায্য করে
-    # real world-এ এটা কোথায় দেখা যায়: ডিজাইন টুলে (Figma/Photoshop) ruler গ্রিড overlay
-    set_color(config.DEBUG_GRID, config.DEBUG_GRID_ALPHA)
-    glBegin(GL_LINES)
-    x = 0
-    while x <= config.ROOM_W:
-        glVertex2f(x, 0)
-        glVertex2f(x, config.ROOM_H)
-        x += config.GRID_STEP
-    y = 0
-    while y <= config.ROOM_H:
-        glVertex2f(0, y)
-        glVertex2f(config.ROOM_W, y)
-        y += config.GRID_STEP
+    set_color(config.GLOW_WARM, config.RAY_ALPHA)
+    glBegin(GL_QUADS)
+    for x0, y0, x1, y1 in rays:
+        clip = cohen_sutherland(x0, y0, x1, y1, rect)
+        if clip is None:
+            continue
+        _draw_ray_cells(*clip)
     glEnd()
-
-
-def _draw_clip_rect():
-    # কী করছে: রুমের clip rectangle-এর সীমানা (ROOM_CLIP_RECT) একটি রেখা-লুপে আঁকে
-    # কেন লাগছে: রশ্মি ঠিক এই আয়তক্ষেত্রে কাটা হয়; সবুজ রশ্মি এর প্রান্তে থামে তা দেখাতে
-    # real world-এ এটা কোথায় দেখা যায়: rendering-এ clipping/viewport সীমানা visualize করা
-    xmin, ymin, xmax, ymax = config.ROOM_CLIP_RECT
-    set_color(config.DEBUG_CLIP)
-    glBegin(GL_LINE_LOOP)
-    glVertex2f(xmin, ymin)
-    glVertex2f(xmax, ymin)
-    glVertex2f(xmax, ymax)
-    glVertex2f(xmin, ymax)
-    glEnd()
-
-
-def _draw_bezier():
-    # কী করছে: হাঁটার Bezier বক্ররেখা (WALK_P0..P3) নমুনা করে রেখায় আঁকে ও ৪টি কন্ট্রোল পয়েন্টে ছোট বর্গ বসায়
-    # কেন লাগছে: চরিত্র কোন পথে হাঁটে ও কন্ট্রোল পয়েন্ট কোথায় তা চোখে দেখাতে (viva-তে খুব কাজে দেয়)
-    # real world-এ এটা কোথায় দেখা যায়: ভেক্টর এডিটরে pen tool-এর curve ও তার handle পয়েন্ট দেখানো
-    pts = bezier_points(config.WALK_P0, config.WALK_P1, config.WALK_P2, config.WALK_P3,
-                        config.DEBUG_BEZIER_STEPS)
-    set_color(config.DEBUG_BEZIER)
-    glBegin(GL_LINE_STRIP)
-    for x, y in pts:
-        glVertex2f(x, y)
-    glEnd()
-    # ৪টি কন্ট্রোল পয়েন্ট — প্রতিটির চারপাশে ৩×৩ বর্গ
-    for px, py in (config.WALK_P0, config.WALK_P1, config.WALK_P2, config.WALK_P3):
-        draw_rect(px - 1, py - 1, 3, 3, config.DEBUG_CTRL)
-
-
-def draw_debug(grid_only=False):
-    # কী করছে: ডিবাগ overlay আঁকে — সবসময় গ্রিড; grid_only না হলে clip rect ও Bezier বক্ররেখা+পয়েন্টও
-    # কেন লাগছে: key G শুধু গ্রিড চায়, key D পুরো overlay; দুটোই এক জায়গা থেকে সামলাতে
-    # real world-এ এটা কোথায় দেখা যায়: এডিটরে "grid only" বনাম "full guides" টগল
-    _draw_grid()
-    if grid_only:
-        return
-    _draw_clip_rect()
-    _draw_bezier()
