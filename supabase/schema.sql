@@ -26,6 +26,7 @@ create table if not exists wsr_status (
   today_date     date,                        -- Asia/Dhaka date today_seconds belongs to
   wants_next     boolean not null default false,   -- dibs (Phase 14)
   wants_next_at  timestamptz,
+  wants_next_pct integer,                        -- "keep X% for me" (Phase 14b)
   last_heartbeat timestamptz,                 -- server time, set by wsr_update_status
   app_version    text,
   updated_at     timestamptz not null default now()
@@ -57,6 +58,7 @@ begin
     wants_next    = coalesce((p_fields->>'wants_next')::boolean, wants_next),
     wants_next_at = case when p_fields ? 'wants_next_at'
                          then (p_fields->>'wants_next_at')::timestamptz else wants_next_at end,
+    wants_next_pct = coalesce((p_fields->>'wants_next_pct')::int, wants_next_pct),
     app_version   = coalesce(p_fields->>'app_version', app_version),
     last_heartbeat = now(),
     updated_at     = now()

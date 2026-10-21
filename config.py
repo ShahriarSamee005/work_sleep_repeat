@@ -364,6 +364,16 @@ DIBS_BOX = (198, 44, 36, 11)     # বাটনের বাক্স (x, y, w, 
 DIBS_LABEL_DY = 8                # বাক্সের y থেকে লেখার baseline offset
 CARD_NEXT_DX = 29                # সঙ্গীর কার্ডে "next" চিহ্নের x offset (কার্ড x থেকে)
 
+# dibs percentage slider (Phase 14b) — dibs চালু থাকলে বাটনের নিচে ট্র্যাক দেখায়
+SLIDER_Y = 56                    # ট্র্যাকের শুরু y (DIBS_BOX-এর ঠিক নিচে)
+SLIDER_X0 = 200                  # ট্র্যাকের বাঁ প্রান্ত x
+SLIDER_X1 = 232                  # ট্র্যাকের ডান প্রান্ত x
+SLIDER_H = 3                     # ট্র্যাকের উচ্চতা
+DIBS_PCT_DEFAULT = 50            # ডিফল্ট শতাংশ
+DIBS_PCT_STEP = 5                # ধাপ (5 এর গুণিতক)
+DIBS_PCT_MIN = 0                 # সর্বনিম্ন
+DIBS_PCT_MAX = 100               # সর্বোচ্চ
+
 # dibs বাবল (design §3) — চরিত্রের মাথার উপরে; রুম-লোকাল offset
 BUBBLE_DX = 14                   # চরিত্রের x থেকে বাবলের বাঁ কিনারা (ডানে, যাতে বিছানার
                                  # হেডবোর্ডের উপরে না পড়ে)

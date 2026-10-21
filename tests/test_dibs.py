@@ -174,3 +174,97 @@ def test_peer_dibs_arrives_from_the_server():
         ],
     }, T0)
     assert st.snapshot(T0).peer.wants_next is True
+
+
+# ---------------- Phase 14b: dibs percentage ----------------
+
+def test_set_dibs_with_pct():
+    st = app()
+    st.set_dibs(True, T0, pct=75)
+    s = st.snapshot(T0)
+    assert s.me.wants_next is True
+    assert s.me.wants_next_pct == 75
+
+
+def test_pct_clears_on_cancel():
+    st = app()
+    st.set_dibs(True, T0, pct=60)
+    st.set_dibs(False, T0 + 1)
+    assert st.snapshot(T0).me.wants_next_pct is None
+
+
+def test_pct_clears_when_starting_work():
+    st = app()
+    st.set_dibs(True, T0, pct=80)
+    st.set_working(True, T0 + 60)
+    s = st.snapshot(T0 + 60)
+    assert s.me.wants_next is False
+    assert s.me.wants_next_pct is None
+
+
+def test_pct_clears_on_expire():
+    st = app()
+    st.set_dibs(True, T0, pct=30)
+    st.expire_dibs(T0 + config.DIBS_EXPIRE + 1)
+    assert st.snapshot(T0).me.wants_next_pct is None
+
+
+def test_status_fields_carry_pct():
+    st = app()
+    st.set_dibs(True, T0, pct=55)
+    fields = sync.status_fields(st.snapshot(T0), T0, st.dibs_since())
+    assert fields["wants_next_pct"] == 55
+
+
+def test_status_fields_null_pct_when_no_dibs():
+    st = app()
+    fields = sync.status_fields(st.snapshot(T0), T0, st.dibs_since())
+    assert fields["wants_next_pct"] is None
+
+
+def test_apply_state_with_pct():
+    st = app()
+    engine = sync.Sync(st, None, me="samee", peer="rifat")
+    engine.apply_state({
+        "server_now": "2023-11-14T22:13:20+00:00",
+        "status": [
+            {"user_id": "rifat", "display_name": "Rifat", "working": True,
+             "wants_next": True, "wants_next_pct": 40,
+             "last_heartbeat": "2023-11-14T22:13:20+00:00",
+             "today_seconds": 0, "since": None},
+        ],
+    }, T0)
+    s = st.snapshot(T0)
+    assert s.peer.wants_next is True
+    assert s.peer.wants_next_pct == 40
+
+
+def test_apply_state_without_pct():
+    st = app()
+    engine = sync.Sync(st, None, me="samee", peer="rifat")
+    engine.apply_state({
+        "server_now": "2023-11-14T22:13:20+00:00",
+        "status": [
+            {"user_id": "rifat", "display_name": "Rifat", "working": True,
+             "wants_next": True,
+             "last_heartbeat": "2023-11-14T22:13:20+00:00",
+             "today_seconds": 0, "since": None},
+        ],
+    }, T0)
+    assert st.snapshot(T0).peer.wants_next_pct is None
+
+
+def test_slider_hit_and_pct_from_x():
+    mid_x = (config.SLIDER_X0 + config.SLIDER_X1) / 2
+    assert panel.slider_hit(mid_x, config.SLIDER_Y + 1) is True
+    assert panel.slider_hit(config.SLIDER_X0 - 1, config.SLIDER_Y + 1) is False
+    assert panel.slider_pct_from_x(config.SLIDER_X0) == 0
+    assert panel.slider_pct_from_x(config.SLIDER_X1) == 100
+
+
+def test_slider_pct_snaps_to_step():
+    span = config.SLIDER_X1 - config.SLIDER_X0
+    x_for_53 = config.SLIDER_X0 + 0.53 * span
+    pct = panel.slider_pct_from_x(x_for_53)
+    assert pct == 55
+    assert pct % config.DIBS_PCT_STEP == 0

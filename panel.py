@@ -57,27 +57,46 @@ def dibs_visible(snap):
 
 
 def dibs_hit(gx, gy):
-    # কী করছে: গ্রিড বিন্দু (gx,gy) dibs বাটনের ভেতরে কিনা বলে
-    # কেন লাগছে: ক্লিক বাটনে পড়েছে কিনা জানতে (আগের টগলের মতোই hit-test)
-    # real world-এ এটা কোথায় দেখা যায়: bounding box hit test
     x, y, w, h = config.DIBS_BOX
     return x <= gx < x + w and y <= gy < y + h
 
 
-def _draw_dibs(snap):
-    # কী করছে: dibs বাটন আঁকে — ডাকা না থাকলে "Call dibs", ডেকে থাকলে চাপা রূপে "Waiting — cancel"
-    # কেন লাগছে: design §2.3-এর দুটি সক্রিয় অবস্থা; সঙ্গী ডাকলে বাটন নয়, তার কার্ডে চিহ্ন বসে
-    # real world-এ এটা কোথায় দেখা যায়: toggle বাটনের pressed/unpressed রূপ
+def slider_hit(gx, gy):
+    return (config.SLIDER_X0 <= gx <= config.SLIDER_X1
+            and config.SLIDER_Y <= gy < config.SLIDER_Y + config.SLIDER_H)
+
+
+def slider_pct_from_x(gx):
+    span = config.SLIDER_X1 - config.SLIDER_X0
+    raw = (gx - config.SLIDER_X0) / span * 100
+    raw = max(config.DIBS_PCT_MIN, min(config.DIBS_PCT_MAX, raw))
+    return round(raw / config.DIBS_PCT_STEP) * config.DIBS_PCT_STEP
+
+
+def _draw_slider(pct):
+    x0, x1 = config.SLIDER_X0, config.SLIDER_X1
+    sy, sh = config.SLIDER_Y, config.SLIDER_H
+    draw_rect(x0, sy, x1 - x0, sh, config.PANEL_CARD)
+    handle_x = x0 + int((pct / 100) * (x1 - x0))
+    draw_rect(handle_x - 1, sy, 3, sh, config.ACCENT)
+
+
+def _draw_dibs(snap, dibs_pct):
     if not dibs_visible(snap):
-        return                                         # কেউ কাজ করছে না → বাটন নেই
+        return
     x, y, w, h = config.DIBS_BOX
     mine = snap.me.wants_next
     fill = config.ACCENT if mine else config.PANEL_CARD
     border = config.ACCENT if mine else config.PANEL_BORDER
-    text = ("Waiting " + DASH + " cancel") if mine else "Call dibs"
-    color = config.OUTLINE if mine else config.TEXT    # চাপা অবস্থায় গাঢ় লেখা, নাহলে হালকা
+    if mine:
+        pct = snap.me.wants_next_pct if snap.me.wants_next_pct is not None else dibs_pct
+        text = "keep %d%% " % pct + DASH + " cancel"
+    else:
+        text = "Call dibs"
+    color = config.OUTLINE if mine else config.TEXT
     draw_box(x, y, w, h, fill, outline=border)
     _draw_centered(config.PANEL_CENTER_X, y + config.DIBS_LABEL_DY, text, color)
+    _draw_slider(snap.me.wants_next_pct if mine and snap.me.wants_next_pct is not None else dibs_pct)
 
 
 def _draw_card(box, view):
@@ -94,8 +113,11 @@ def _draw_card(box, view):
     draw_rect(x + dx, y + dy, dw, dh,
               config.ONLINE_GREEN if view.online else config.OFFLINE_GREY)
 
-    if view.wants_next:                              # এই জন পরেরবার চায় (design §2.3)
-        draw_text(x + config.CARD_NEXT_DX, y + config.CARD_NAME_DY, "next",
+    if view.wants_next:
+        label = "next"
+        if view.wants_next_pct is not None:
+            label = "%d%%" % view.wants_next_pct
+        draw_text(x + config.CARD_NEXT_DX, y + config.CARD_NAME_DY, label,
                   config.ACCENT, PANEL_FONT)
 
     _draw_centered(config.PANEL_CENTER_X, y + config.CARD_NAME_DY,
@@ -123,12 +145,9 @@ def status_line(snap):
     return "Claude is free", config.TEXT
 
 
-def draw_panel(snap):
-    # কী করছে: পুরো প্যানেল আঁকে — ব্যাকগ্রাউন্ড, আইকন, শিরোনাম, স্ট্যাটাস/সাব-স্ট্যাটাস,
-    #           দুই টাইম কার্ড (online ডট সহ) ও নিচে সংযোগের লাইন
-    # কেন লাগছে: এটাই ডান পাশের UI; কে কাজ করছে, কত সময়, কে অনলাইন, আর আমরা সার্ভারে পৌঁছাচ্ছি কিনা
-    # real world-এ এটা কোথায় দেখা যায়: অ্যাপের side panel / status HUD
-    # snap: state.StateSnapshot — প্যানেল শুধু এটিই পড়ে, কোনো লক বা মডিউল ছোঁয় না (techspec §7)
+def draw_panel(snap, dibs_pct=None):
+    if dibs_pct is None:
+        dibs_pct = config.DIBS_PCT_DEFAULT
     views = {snap.me.user_id: snap.me, snap.peer.user_id: snap.peer}
     any_w = snap.me.working or snap.peer.working
 
@@ -145,11 +164,15 @@ def draw_panel(snap):
     _draw_centered(config.PANEL_CENTER_X, config.PANEL_STATUS_Y, text, color)
 
     # সাব-স্ট্যাটাস
-    sub = "Ask before you start" if any_w else "Nobody is working"
+    if snap.peer.wants_next and snap.peer.wants_next_pct is not None:
+        sub = "keep %d%% for me" % snap.peer.wants_next_pct
+    elif any_w:
+        sub = "Ask before you start"
+    else:
+        sub = "Nobody is working"
     _draw_centered(config.PANEL_CENTER_X, config.PANEL_SUB_Y, sub, config.TEXT_DIM)
 
-    # dibs বাটন (design §2.3) — Phase 10-এ বাদ দেওয়া টগলের জায়গাতেই; সঙ্গী কাজ না করলে দেখা যায় না
-    _draw_dibs(snap)
+    _draw_dibs(snap, dibs_pct)
 
     # দুই টাইম কার্ড — বাঁয়ে সবসময় Samee, ডানে Rifat (কে অ্যাপ চালাচ্ছে তা নির্বিশেষে)
     _draw_card(config.CARD1_BOX, views["samee"])

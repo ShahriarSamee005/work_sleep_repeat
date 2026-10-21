@@ -20,6 +20,7 @@ class PersonView:
     since: datetime | None       # চলতি কাজের সেশন কখন শুরু (None = কাজ করছে না)
     today_seconds: int           # আজকের মোট সময় (চলতি সেশনসহ)
     wants_next: bool             # dibs ডেকেছে কিনা (Phase 14)
+    wants_next_pct: int | None   # dibs-এর সাথে "keep X% for me" (Phase 14b)
     online: bool                 # heartbeat তাজা কিনা (নিজের জন্য সবসময় True)
 
 
@@ -49,13 +50,15 @@ class AppState:
         self._since = None            # epoch সেকেন্ড বা None (ভিউতে datetime হয়ে যায়)
         self._today_seconds = 0.0     # শেষ হওয়া সেশনগুলোর যোগফল (চলতি সেশন এতে নেই)
         self._wants_next = False
+        self._wants_next_pct = None
         self._wants_next_at = None    # dibs কখন ডেকেছি (epoch) — মেয়াদ গোনার জন্য
         self._day = clock.dhaka_today(now)   # today_seconds কোন Dhaka দিনের, তা মনে রাখি
         self._connected = False
         # সঙ্গীর অবস্থা Phase 11-এর sync থ্রেড ভরবে; এখন প্লেসহোল্ডার (ঘুমন্ত, অফলাইন)
         self._peer = PersonView(
             user_id=peer_id, name=_NAMES.get(peer_id, peer_id), working=False,
-            since=None, today_seconds=0, wants_next=False, online=False,
+            since=None, today_seconds=0, wants_next=False, wants_next_pct=None,
+            online=False,
         )
 
     # ---- লেখা (main থ্রেড) ----
@@ -71,6 +74,7 @@ class AppState:
             if working:
                 self._since = now
                 self._wants_next = False      # কাজ শুরু করলে নিজের dibs আপনিই বাতিল (techspec §9)
+                self._wants_next_pct = None
                 self._wants_next_at = None
             elif self._since is not None:
                 self._today_seconds += max(0.0, now - self._since)
@@ -78,14 +82,12 @@ class AppState:
             self._working = working
             return True
 
-    def set_dibs(self, wants, now):
-        # কী করছে: নিজের "পরেরবার আমি" (dibs) চালু/বাতিল করে; বদল হলে True দেয়
-        # কেন লাগছে: সঙ্গী কাজ করার সময় তাকে না থামিয়ে জানানো যে আমি পরে চাই (appflow §8)
-        # real world-এ এটা কোথায় দেখা যায়: কিউতে নাম লেখানো / "notify me when free"
+    def set_dibs(self, wants, now, pct=None):
         with self._lock:
             if wants == self._wants_next:
                 return False
             self._wants_next = wants
+            self._wants_next_pct = pct if wants else None
             self._wants_next_at = now if wants else None
             return True
 
@@ -99,6 +101,7 @@ class AppState:
             if now - self._wants_next_at < config.DIBS_EXPIRE:
                 return False
             self._wants_next = False
+            self._wants_next_pct = None
             self._wants_next_at = None
             return True
 
@@ -159,7 +162,8 @@ class AppState:
                 since=clock.to_dt(self._since),
                 today_seconds=int(total),
                 wants_next=self._wants_next,
-                online=True,                      # নিজের heartbeat সবসময় তাজা
+                wants_next_pct=self._wants_next_pct,
+                online=True,
             )
             return StateSnapshot(me=me, peer=self._peer,
                                  connected=self._connected, now=clock.to_dt(now))

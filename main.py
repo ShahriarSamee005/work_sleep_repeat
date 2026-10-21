@@ -81,6 +81,7 @@ _alert_settings = None              # কোন টোস্ট চালু (co
 _alert_memory = alerts.Memory()     # dedupe স্মৃতি
 _prev_snap = None                   # গত সেকেন্ডের snapshot (alerts তুলনা করে)
 _animating = False                  # ৬০ FPS টিক চালু আছে? (উইন্ডো লুকালে বন্ধ রাখি)
+_dibs_pct = config.DIBS_PCT_DEFAULT  # slider-এর বর্তমান শতাংশ (Phase 14b)
 
 # ওয়াল-ক্লক (সময় হিসাব ও দিন): virtual now = শুরু + অতিবাহিত বাস্তব সময় × TIME_SCALE।
 # TIME_SCALE বাড়ালে কার্ড দ্রুত বাড়ে ও মধ্যরাত রিসেট দ্রুত টেস্ট করা যায়। snapshot _fake_wall সেট করতে পারে।
@@ -324,7 +325,7 @@ def display():
     _draw_plaques(views)   # "OFFLINE" ফলক — লেখা, তাই mirror-এর বাইরে
 
     # প্যানেল (design §2) — পুরো snapshot দিই; প্যানেল শুধু সেটিই পড়ে, লক ধরে না
-    panel.draw_panel(snap)
+    panel.draw_panel(snap, dibs_pct=_dibs_pct)
 
 
 def _views(snap):
@@ -509,30 +510,39 @@ def _inject(event_name):
 
 
 def toggle_dibs():
-    # কী করছে: নিজের dibs উল্টে দেয় (ডাকা/বাতিল) ও সাথে সাথে সার্ভারে পুশ করে
-    # কেন লাগছে: প্যানেলের বাটন ও ট্রে মেনু — দুটোই এখান দিয়ে যায়, তাই নিয়ম এক জায়গায়
-    # real world-এ এটা কোথায় দেখা যায়: এক action, একাধিক entry point (বাটন, মেনু, শর্টকাট)
     now = wall_now()
     snap = _state.snapshot(now)
     if not panel.dibs_visible(snap) and not snap.me.wants_next:
-        return False                      # সঙ্গী কাজ করছে না — ডাকার কিছু নেই (বাতিল করা যায়)
-    if _state.set_dibs(not snap.me.wants_next, now):
-        print("WSR: dibs ->", _state.snapshot(now).me.wants_next)
+        return False
+    arming = not snap.me.wants_next
+    pct = _dibs_pct if arming else None
+    if _state.set_dibs(arming, now, pct=pct):
+        print("WSR: dibs ->", _state.snapshot(now).me.wants_next,
+              "pct=%s" % pct if pct is not None else "")
         _push_status(now)
         return True
     return False
 
 
 def on_mouse_press(mx, my, button, modifiers):
-    # কী করছে: বাঁ-বোতাম চাপলে মাউস অবস্থানকে গ্রিডে বদলে dibs বাটনে পড়েছে কিনা দেখে; পড়লে টগল করে
-    # কেন লাগছে: প্যানেলের একমাত্র ক্লিকযোগ্য কন্ট্রোল এখন dibs বাটন (design §2.3)
-    # real world-এ এটা কোথায় দেখা যায়: UI-তে বাটন ক্লিক → hit-test → action
-    # নোট: pyglet-এর মাউস y নিচ-থেকে বাড়ে, আমাদের গ্রিড উপর-থেকে — তাই উচ্চতা থেকে বিয়োগ
     if button != pyglet_mouse.LEFT:
         return
     gx, gy = panel.screen_to_grid(mx, _window.height - my)
+    if panel.slider_hit(gx, gy):
+        global _dibs_pct
+        _dibs_pct = panel.slider_pct_from_x(gx)
+        return
     if panel.dibs_hit(gx, gy):
         toggle_dibs()
+
+
+def on_mouse_drag(mx, my, dx, dy, buttons, modifiers):
+    if not (buttons & pyglet_mouse.LEFT):
+        return
+    gx, gy = panel.screen_to_grid(mx, _window.height - my)
+    if panel.slider_hit(gx, gy):
+        global _dibs_pct
+        _dibs_pct = panel.slider_pct_from_x(gx)
 
 
 def on_key_press(symbol, modifiers):
@@ -570,7 +580,8 @@ def make_window(visible=True):
     win.on_draw = display
     win.on_close = on_close
     win.on_key_press = on_key_press
-    win.on_mouse_press = on_mouse_press      # dibs বাটনের ক্লিক (Phase 14)
+    win.on_mouse_press = on_mouse_press
+    win.on_mouse_drag = on_mouse_drag
     return win
 
 

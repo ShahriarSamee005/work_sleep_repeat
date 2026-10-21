@@ -191,12 +191,14 @@ class Sync:
             if user == self.peer:
                 beat = clock.parse_ts(row.get("last_heartbeat"))
                 online = beat is not None and (server_now - beat) <= config.PEER_OFFLINE_AFTER
+                raw_pct = row.get("wants_next_pct")
                 self.state.set_peer(
                     name=row.get("display_name") or self.peer,
                     working=bool(row.get("working")),
                     since=clock.to_dt(clock.parse_ts(row.get("since"))),
                     today_seconds=int(row.get("today_seconds") or 0),
                     wants_next=bool(row.get("wants_next")),
+                    wants_next_pct=int(raw_pct) if raw_pct is not None else None,
                     online=online,
                 )
             elif user == self.me and not self.resumed:
@@ -218,5 +220,6 @@ def status_fields(snap, now, dibs_since=None):
         "today_date": clock.dhaka_today(now).isoformat(),
         "wants_next": snap.me.wants_next,
         "wants_next_at": clock.to_dt(dibs_since).isoformat() if dibs_since else None,
+        "wants_next_pct": snap.me.wants_next_pct,
         "app_version": config.APP_VERSION,
     }
