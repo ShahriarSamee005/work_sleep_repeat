@@ -154,6 +154,15 @@ RIFAT_RUG_L = "#607f6a"  # Rifat-র রাগ হালকা কিনার�
 SKIN = "#f4f2ee"     # শরীরের সাদা রঙ
 SKIN_S = "#b9b1d9"   # লাভেন্ডার ছায়া
 
+# Per-person colour skin (Zoro / Sanji)
+SAMEE_HAIR = "#4a7a5a"       # muted green (Zoro)
+SAMEE_CLOTHES = "#2e5e50"    # dark teal (Zoro)
+SAMEE_CLOTHES_S = "#1e4838"  # teal shadow
+
+RIFAT_HAIR = "#d4b44a"       # warm blond (Sanji)
+RIFAT_CLOTHES = "#22202e"    # near-black suit (Sanji)
+RIFAT_CLOTHES_S = "#181624"  # suit shadow
+
 # ---- Light ----
 GLOW_WARM = "#ffc26e"    # ল্যাম্পের উষ্ণ আলো
 GLOW_SCREEN = "#8fd0ff"  # মনিটরের নীল আভা

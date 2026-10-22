@@ -59,8 +59,8 @@ SMALL_FONT = font.BITMAP_8X13
 _window = None
 
 # দুই ক্যারেক্টার — সব per-user state এখন এখানে (Phase 5-এর গ্লোবাল বুলিয়ান বাদ)
-samee = character.Character("samee")
-rifat = character.Character("rifat")
+samee = character.Character("samee", sprites.CHAR_COLORS_SAMEE)
+rifat = character.Character("rifat", sprites.CHAR_COLORS_RIFAT)
 
 # অ্যানিমেশন ঘড়ি ও dt: স্বাভাবিক রানে বাস্তব সময়; snapshot টুল _fake_time সেট করে সময় ফ্রিজ করতে পারে
 _start_time = time.perf_counter()

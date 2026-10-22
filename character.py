@@ -28,7 +28,7 @@ def _lerp(a, b, t):
     return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
 
 
-def draw_sitting(time_now):
+def draw_sitting(time_now, colors=None):
     # কী করছে: ডেস্কে বসা ভঙ্গি আঁকছে (হাত → শরীর → মাথা) এবং time_now দেখে টাইপিং-এ এক হাত ১px উপরে তোলে
     # কেন লাগছে: WORKING অবস্থায় ক্যারেক্টার বসে টাইপ করছে দেখাতে; হাত পাল্টে নড়াচড়ার ভাব আসে
     # real world-এ এটা কোথায় দেখা যায়: গেমে সময় অনুযায়ী frame বেছে নিয়ে অ্যানিমেশন (keyframe by time)
@@ -48,16 +48,18 @@ def draw_sitting(time_now):
     draw_rect(hrx, hry - right_up, hrw, hrh, config.OUTLINE)
     draw_pixel(config.SIT_HAND_R_SKIN[0], config.SIT_HAND_R_SKIN[1] - right_up, config.SKIN)
 
-    draw_sprite(*config.SIT_BODY_POS, sprites.BODY_BACK, sprites.BODY_BACK_COLORS)
-    draw_sprite(*config.SIT_HEAD_POS, sprites.HEAD_BACK, sprites.HEAD_BACK_COLORS)
+    c = colors or sprites.CHAR_COLORS
+    draw_sprite(*config.SIT_BODY_POS, sprites.BODY_BACK, c)
+    draw_sprite(*config.SIT_HEAD_POS, sprites.HEAD_BACK, c)
 
 
 class Character:
-    def __init__(self, name):
+    def __init__(self, name, colors=None):
         # কী করছে: একটি ক্যারেক্টার তৈরি করছে, শুরুতে বিছানায় ঘুমন্ত অবস্থায়
         # কেন লাগছে: Samee ও Rifat দুজনের জন্য আলাদা অবজেক্ট; সব per-user state এখানে থাকে
         # real world-এ এটা কোথায় দেখা যায়: গেমে প্রতিটি চরিত্র নিজের state নিয়ে আলাদা অবজেক্ট
         self.name = name
+        self.colors = colors or sprites.CHAR_COLORS
         self.state = IN_BED
         self.progress = 0.0        # 0..1, বর্তমান state-এর ভেতরে অগ্রগতি
         self.target_working = False
@@ -232,10 +234,10 @@ class Character:
         # real world-এ এটা কোথায় দেখা যায়: চরিত্রের current animation state রেন্ডার করা
         s = self.state
         if s == IN_BED:
-            draw_sprite(*config.HEAD_SLEEP_POS, sprites.HEAD_SLEEP, sprites.HEAD_SLEEP_COLORS)
+            draw_sprite(*config.HEAD_SLEEP_POS, sprites.HEAD_SLEEP, self.colors)
             return
         if s == WORKING:
-            draw_sitting(time_now)
+            draw_sitting(time_now, self.colors)
             return
 
         x, y = self.position()
@@ -245,7 +247,7 @@ class Character:
             frame = int(time_now / config.STEP_INTERVAL) % 2
             bob = -1 if frame == 0 else 0          # প্রতি পদক্ষেপে ১px bob
             sprite = self._walk_sprite(time_now)
-            draw_sprite(x, y + bob, sprite, sprites.CHAR_COLORS)
+            draw_sprite(x, y + bob, sprite, self.colors)
         elif s in (SITTING_DOWN, STANDING_UP):
             # বসা/ওঠার সময় পায়ের কাছে pivot করে সামান্য squash (glScalef about feet)
             if s == SITTING_DOWN:
@@ -257,7 +259,7 @@ class Character:
             glTranslatef(0, feet_y, 0)             # pivot পায়ে নিই
             glScalef(1, squash, 1)                 # শুধু উল্লম্বে চাপা
             glTranslatef(0, -feet_y, 0)            # আবার ফেরত
-            draw_sprite(x, y, self._stand_sprite(), sprites.CHAR_COLORS)
+            draw_sprite(x, y, self._stand_sprite(), self.colors)
             glPopMatrix()
         else:                                      # GETTING_UP, LYING_DOWN
-            draw_sprite(x, y, self._stand_sprite(), sprites.CHAR_COLORS)
+            draw_sprite(x, y, self._stand_sprite(), self.colors)

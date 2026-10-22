@@ -1,17 +1,40 @@
 import config
 
-# ক্যারেক্টার স্প্রাইটের সাধারণ legend: '#' = OUTLINE, 'W' = SKIN, 'S' = SKIN_S, '.' = transparent
+# ক্যারেক্টার স্প্রাইটের সাধারণ legend:
+#   '#' = OUTLINE, 'W' = SKIN, 'S' = SKIN_S,
+#   'H' = hair, 'C' = clothes, 'c' = clothes shadow, '.' = transparent
 CHAR_COLORS = {
-    "#": config.OUTLINE,   # আউটলাইন
-    "W": config.SKIN,      # শরীরের সাদা
-    "S": config.SKIN_S,    # লাভেন্ডার ছায়া
+    "#": config.OUTLINE,
+    "W": config.SKIN,
+    "S": config.SKIN_S,
+    "H": config.SKIN,
+    "C": config.SKIN,
+    "c": config.SKIN_S,
+}
+
+CHAR_COLORS_SAMEE = {
+    "#": config.OUTLINE,
+    "W": config.SKIN,
+    "S": config.SKIN_S,
+    "H": config.SAMEE_HAIR,
+    "C": config.SAMEE_CLOTHES,
+    "c": config.SAMEE_CLOTHES_S,
+}
+
+CHAR_COLORS_RIFAT = {
+    "#": config.OUTLINE,
+    "W": config.SKIN,
+    "S": config.SKIN_S,
+    "H": config.RIFAT_HAIR,
+    "C": config.RIFAT_CLOTHES,
+    "c": config.RIFAT_CLOTHES_S,
 }
 
 # HEAD_SLEEP (9×7) — ঘুমন্ত মাথা; ৪ নম্বর সারিতে বন্ধ চোখ, উপরে গোল মাথা
 HEAD_SLEEP = [
     "..#####..",
-    ".#WWWWW#.",
-    "#WWWWWWS#",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
     "#W##W##S#",   # বন্ধ চোখ
     "#WWWWWWS#",
     ".#WWWWS#.",
@@ -22,21 +45,21 @@ HEAD_SLEEP_COLORS = CHAR_COLORS
 # HEAD_BACK (9×7) — পেছন থেকে মাথা (বসে কাজ করার সময়); চোখ নেই
 HEAD_BACK = [
     "..#####..",
-    ".#WWWWW#.",
-    "#WWWWWWS#",
-    "#WWWWWWS#",
-    "#WWWWWSS#",
-    ".#WSSSS#.",
+    ".#HHHHH#.",
+    "#HHHHHHh#",
+    "#HHHHHHh#",
+    "#HHHHHhh#",
+    ".#Hhhhh#.",
     "..#####..",
 ]
 HEAD_BACK_COLORS = CHAR_COLORS
 
 # BODY_BACK (10×5) — পেছন থেকে কাঁধ/পিঠ
 BODY_BACK = [
-    "#WWWWWWWS#",
-    "#WWWWWWWS#",
-    "#WWWWWWSS#",
-    ".#WWWSSS#.",
+    "#CCCCCCCc#",
+    "#CCCCCCCc#",
+    "#CCCCCCcc#",
+    ".#CCCccc#.",
     ".########.",
 ]
 BODY_BACK_COLORS = CHAR_COLORS
@@ -44,28 +67,28 @@ BODY_BACK_COLORS = CHAR_COLORS
 # STAND (9×13) — দাঁড়ানো পূর্ণ শরীর
 STAND = [
     "..#####..",
-    ".#WWWWW#.",
-    "#WWWWWWS#",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
     "#W#WW#WS#",
     "#WWWWWWS#",
     ".#WWWWS#.",
     "..#####..",
-    ".#WWWWS#.",
-    ".#WWWWS#.",
-    ".#WWWSS#.",
-    ".#WW#SS#.",
-    ".#W#.#S#.",
+    ".#CCCCc#.",
+    ".#CCCCc#.",
+    ".#CCCcc#.",
+    ".#CC#cc#.",
+    ".#C#.#c#.",
     ".##..##..",
 ]
 
 # WALK_A / WALK_B — STAND-এর সাথে শুধু শেষ ২ সারি (পা) বদলায়; হাঁটার সময় ০.১৫s অন্তর অদলবদল
 # নোট: design §7-এ WALK_A-এর পা সারি ভুলে ১০ চওড়া (STAND ৯ চওড়া); trailing '.' বাদ দিয়ে ৯-এ মিলিয়েছি।
 _WALK_A_LEGS = [
-    ".#W#..#S#",
+    ".#C#..#c#",
     ".##...##.",
 ]
 _WALK_B_LEGS = [
-    ".##..#S#.",
+    ".##..#c#.",
     ".....##..",
 ]
 WALK_A = STAND[:11] + _WALK_A_LEGS
