@@ -214,7 +214,6 @@ def _draw_room(char, translate_x, mirror, warn=False, offline=False, dibs=False)
     lighting.draw_darkness(lit)
     if char.lamp_on:
         lighting.draw_glow()
-        lighting.draw_rays()
     if char.monitor_on:
         lighting.draw_screen_glow()
 

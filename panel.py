@@ -76,9 +76,15 @@ def slider_pct_from_x(gx):
 def _draw_slider(pct):
     x0, x1 = config.SLIDER_X0, config.SLIDER_X1
     sy, sh = config.SLIDER_Y, config.SLIDER_H
-    draw_rect(x0, sy, x1 - x0, sh, config.PANEL_CARD)
-    handle_x = x0 + int((pct / 100) * (x1 - x0))
+    span = x1 - x0
+    draw_rect(x0, sy, span, sh, config.PANEL_CARD)
+    # handle
+    handle_x = x0 + int((pct / 100) * span)
     draw_rect(handle_x - 1, sy, 3, sh, config.ACCENT)
+    # readout above handle
+    label = "%d%%" % pct
+    lw = text_width(label, PANEL_FONT) / config.PIXEL
+    draw_text(handle_x - lw / 2, sy - 1, label, config.TEXT, PANEL_FONT)
 
 
 def _draw_dibs(snap, dibs_pct):

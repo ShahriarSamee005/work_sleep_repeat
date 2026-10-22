@@ -370,7 +370,7 @@ SLIDER_X0 = 200                  # ট্র্যাকের বাঁ প্�
 SLIDER_X1 = 232                  # ট্র্যাকের ডান প্রান্ত x
 SLIDER_H = 3                     # ট্র্যাকের উচ্চতা
 DIBS_PCT_DEFAULT = 50            # ডিফল্ট শতাংশ
-DIBS_PCT_STEP = 5                # ধাপ (5 এর গুণিতক)
+DIBS_PCT_STEP = 10               # ধাপ (10 এর গুণিতক)
 DIBS_PCT_MIN = 0                 # সর্বনিম্ন
 DIBS_PCT_MAX = 100               # সর্বোচ্চ
 

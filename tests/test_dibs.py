@@ -266,5 +266,7 @@ def test_slider_pct_snaps_to_step():
     span = config.SLIDER_X1 - config.SLIDER_X0
     x_for_53 = config.SLIDER_X0 + 0.53 * span
     pct = panel.slider_pct_from_x(x_for_53)
-    assert pct == 55
+    assert pct == 50
     assert pct % config.DIBS_PCT_STEP == 0
+    x_for_66 = config.SLIDER_X0 + 0.66 * span
+    assert panel.slider_pct_from_x(x_for_66) == 70

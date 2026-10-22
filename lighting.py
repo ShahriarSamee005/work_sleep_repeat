@@ -1,5 +1,3 @@
-import math
-
 from OpenGL.GL import (
     glBegin,
     glEnd,
@@ -7,7 +5,7 @@ from OpenGL.GL import (
     GL_QUADS,
 )
 
-from algorithms import bresenham_line, cohen_sutherland, scanline_circle
+from algorithms import scanline_circle
 from pixel import draw_rect, set_color
 
 import config
@@ -77,37 +75,3 @@ def draw_screen_glow():
     glEnd()
 
 
-def _ray_endpoints():
-    # কী করছে: RAY_ORIGIN থেকে সোজা নিচ বরাবর ±RAY_SPREAD_DEG পাখা মেলে RAY_COUNT রশ্মির (x0,y0,x1,y1) দেয়
-    # কেন লাগছে: ল্যাম্প থেকে নামা রশ্মিগুলোর দিক/দৈর্ঘ্য একবারে হিসাব করে রাখতে (ক্লিপ ও আঁকা দুটোতেই লাগে)
-    # real world-এ এটা কোথায় দেখা যায়: স্পটলাইটের cone — এক উৎস থেকে নানা কোণে রশ্মি
-    ox, oy = config.RAY_ORIGIN
-    rays = []
-    for i in range(config.RAY_COUNT):
-        frac = i / (config.RAY_COUNT - 1)                 # 0..1 সমান ভাগে
-        ang = math.radians((frac * 2 - 1) * config.RAY_SPREAD_DEG)  # -spread .. +spread
-        ex = ox + config.RAY_LENGTH * math.sin(ang)       # x-ঘটক: বাঁ/ডানে হেলা
-        ey = oy + config.RAY_LENGTH * math.cos(ang)       # y-ঘটক: নিচে (cos, কারণ সোজা নিচ = 0°)
-        rays.append((ox, oy, ex, ey))
-    return rays
-
-
-def _draw_ray_cells(x0, y0, x1, y1):
-    # কী করছে: (x0,y0)-(x1,y1) রেখার bresenham ঘরগুলো খোলা glBegin(GL_QUADS)-এ quad হিসেবে জমা দেয়
-    # কেন লাগছে: রশ্মি হাতে-লেখা bresenham দিয়েই রাস্টারাইজ হয় (CG technique দেখানো viva-র জন্য)
-    # real world-এ এটা কোথায় দেখা যায়: রেখা → পিক্সেল রূপান্তর (line rasterization)
-    for cx, cy in bresenham_line(int(round(x0)), int(round(y0)), int(round(x1)), int(round(y1))):
-        _emit_span(cy, cx, cx)     # এক ঘর = ১×১ quad
-
-
-def draw_rays():
-    rays = _ray_endpoints()
-    rect = config.ROOM_CLIP_RECT
-    set_color(config.GLOW_WARM, config.RAY_ALPHA)
-    glBegin(GL_QUADS)
-    for x0, y0, x1, y1 in rays:
-        clip = cohen_sutherland(x0, y0, x1, y1, rect)
-        if clip is None:
-            continue
-        _draw_ray_cells(*clip)
-    glEnd()
