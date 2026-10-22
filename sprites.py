@@ -217,3 +217,33 @@ TRAY_LAMP_COLORS = {
     "G": config.GLOW_WARM,
     "#": config.OUTLINE,
 }
+
+# TRAY_HEAD (16×16) — ক্যারেক্টারের মাথা, অ্যাপ আইকন হিসেবে ব্যবহৃত
+TRAY_HEAD = [
+    "................",
+    ".....######.....",
+    "....#WWWWWW#....",
+    "...#WWWWWWWW#...",
+    "..#WWWWWWWWWS#..",
+    "..#WWWWWWWWWS#..",
+    ".#WW##WWWW##WS#.",
+    ".#WWWWWWWWWWWS#.",
+    "..#WWWWWWWWWSS#.",
+    "...#WWWWWWSS#...",
+    "....#WSSSS#.....",
+    ".....######.....",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+TRAY_HEAD_COLORS = {
+    "#": config.OUTLINE,
+    "W": config.SKIN,
+    "S": config.SKIN_S,
+}
+TRAY_HEAD_OFF_COLORS = {
+    "#": config.PANEL_BORDER,
+    "W": config.OFFLINE_GREY,
+    "S": config.PANEL_BORDER,
+}

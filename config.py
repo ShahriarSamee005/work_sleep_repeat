@@ -60,7 +60,7 @@ PUSH_WHILE_WORKING = 60         # কাজ চলার সময় প্র�
 BACKOFF_SECONDS = (2, 4, 8, 16, 30)   # পরপর ব্যর্থতায় অপেক্ষার ক্রম (শেষ মানটিই সর্বোচ্চ)
 FAILURES_BEFORE_OFFLINE = 2     # এতবার পরপর ব্যর্থ হলে প্যানেলে "offline" দেখাই (appflow §10)
 TIME_JUMP_SECONDS = 30          # লুপের দুই চক্রে এত ফাঁক = পিসি ঘুমিয়েছিল → তৎক্ষণাৎ reconnect
-APP_VERSION = "2.0-phase13"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
+APP_VERSION = "2.0-phase16"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
 
 # ট্রে ও অ্যালার্ট (techspec §9 / design §4–5; Phase 13)
 CONFLICT_AFTER = 30             # দুজনে একসাথে এত সেকেন্ড কাজ করলে তবেই দ্বন্দ্বের টোস্ট (appflow §9)
@@ -165,7 +165,6 @@ PANEL_BORDER = "#1c1822"      # প্যানেলের বর্ডার
 PANEL_CARD = "#3a3144"        # টাইম কার্ড
 PANEL_CARD_ACTIVE = "#4a3a2c"  # সক্রিয় (কাজ করছে) কার্ড
 ACCENT = "#e8a857"           # toggle চালু, সক্রিয় কার্ডের বর্ডার
-TOGGLE_OFF = "#4a4156"       # toggle বন্ধ
 TEXT = "#f1e9dd"             # সাধারণ টেক্সট
 TEXT_MUTED = "#d9cbb8"       # হালকা টেক্সট
 TEXT_DIM = "#a99bb5"         # আরও ম্লান টেক্সট

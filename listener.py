@@ -4,6 +4,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import config
+import log
 
 LOCAL_CLIENTS = ("127.0.0.1", "::1", "::ffff:127.0.0.1")   # শুধু এই পিসি
 
@@ -138,14 +139,14 @@ class Listener:
         except (ValueError, AttributeError):
             if not self.bad_json_logged:
                 self.bad_json_logged = True
-                print("WSR: ignoring malformed hook payload (logged once)")
+                log.get().warning("ignoring malformed hook payload (logged once)")
             return
         if not isinstance(event, dict):
             return
         try:
             self._on_event(event)
         except Exception as exc:                  # কলব্যাকের ভুলেও সার্ভার মরবে না
-            print("WSR: hook callback failed:", exc)
+            log.get().error("hook callback failed: %s", exc)
 
     def _show(self):
         if self._on_show is None:
@@ -153,7 +154,7 @@ class Listener:
         try:
             self._on_show()
         except Exception as exc:
-            print("WSR: show callback failed:", exc)
+            log.get().error("show callback failed: %s", exc)
 
 
 def ping_show(host=config.LISTEN_HOST, port=config.LISTEN_PORT,

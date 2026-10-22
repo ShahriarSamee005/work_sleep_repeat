@@ -40,6 +40,7 @@ import config
 import font
 import lighting
 import listener
+import log
 import panel
 import room
 import setup_ui
@@ -376,9 +377,9 @@ def _apply_activity(now):
     expired = _state.expire_dibs(now)          # ২ ঘণ্টা পেরোনো dibs নিজে থেকে বাতিল (techspec §9)
     snap = _state.snapshot(now)
     if changed:
-        print("WSR: working ->", snap.me.working)
+        log.get().info("working -> %s", snap.me.working)
     if expired:
-        print("WSR: dibs expired")
+        log.get().info("dibs expired")
     due = snap.me.working and (now - _last_push) >= config.PUSH_WHILE_WORKING
     if changed or rolled or expired or due:
         _push_status(now)
@@ -448,7 +449,7 @@ def state_tick(dt):
     for toast in alerts.check(_prev_snap, snap, _alert_memory):
         if _alert_settings is not None and not _alert_settings.is_enabled(toast.kind):
             continue                             # এই অ্যালার্ট ব্যবহারকারী বন্ধ করে রেখেছেন
-        print("WSR: toast:", toast.title, "—", toast.body)
+        log.get().info("toast: %s — %s", toast.title, toast.body)
         if _tray is not None:
             _tray.notify(toast.title, toast.body)
     if _tray is not None:
@@ -512,7 +513,7 @@ def _inject(event_name):
     if not _dev:
         return
     _events.put({"hook_event_name": event_name, "session_id": config.DEV_SESSION_ID})
-    print("WSR: dev inject", event_name)
+    log.get().debug("dev inject %s", event_name)
 
 
 def toggle_dibs():
@@ -523,8 +524,8 @@ def toggle_dibs():
     arming = not snap.me.wants_next
     pct = _dibs_pct if arming else None
     if _state.set_dibs(arming, now, pct=pct):
-        print("WSR: dibs ->", _state.snapshot(now).me.wants_next,
-              "pct=%s" % pct if pct is not None else "")
+        log.get().info("dibs -> %s %s", _state.snapshot(now).me.wants_next,
+                       "pct=%s" % pct if pct is not None else "")
         _push_status(now)
         return True
     return False
@@ -567,6 +568,33 @@ def on_key_press(symbol, modifiers):
     return EVENT_HANDLED
 
 
+def _set_window_icon(win):
+    from PIL import Image as PILImage
+    colors = sprites.TRAY_HEAD_COLORS
+    for sz in (16, 32):
+        img = PILImage.new("RGBA", (sz, sz), (0, 0, 0, 0))
+        px = img.load()
+        cells = len(sprites.TRAY_HEAD)
+        scale = max(1, sz // cells)
+        for row, line in enumerate(sprites.TRAY_HEAD):
+            for col, ch in enumerate(line):
+                c = colors.get(ch)
+                if c is None:
+                    continue
+                r, g, b = (int(c.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+                for y in range(row * scale, min(sz, (row + 1) * scale)):
+                    for x in range(col * scale, min(sz, (col + 1) * scale)):
+                        px[x, y] = (r, g, b, 255)
+        raw = img.tobytes()
+        pitch = sz * 4
+        pg_img = pyglet.image.ImageData(sz, sz, "RGBA", raw, pitch=-pitch)
+        if sz == 16:
+            icon16 = pg_img
+        else:
+            icon32 = pg_img
+    win.set_icon(icon16, icon32)
+
+
 def make_window(visible=True):
     # কী করছে: অ্যাপের pyglet উইন্ডো বানায় (legacy GL কনটেক্সট চেয়ে) ও আমাদের হ্যান্ডলার বাঁধে
     # কেন লাগছে: ফেজ ০–৮-এর আঁকা পুরোটাই immediate mode (glBegin) ও display list — core profile-এ
@@ -588,6 +616,7 @@ def make_window(visible=True):
     win.on_key_press = on_key_press
     win.on_mouse_press = on_mouse_press
     win.on_mouse_drag = on_mouse_drag
+    _set_window_icon(win)
     return win
 
 
@@ -596,16 +625,16 @@ def _start_sync(offline, peer, settings):
     # কেন লাগছে: নেট/কনফিগ ছাড়াও অ্যাপ পুরোপুরি চলবে — শুধু সঙ্গীকে দেখা যাবে না (appflow §10)
     # real world-এ এটা কোথায় দেখা যায়: ঐচ্ছিক ব্যাকএন্ড — না থাকলে অ্যাপ "লোকাল মোডে" চলে
     if offline:
-        print("WSR: --offline — no Supabase sync this run")
+        log.get().info("--offline — no Supabase sync this run")
         return None
     if not settings.has_supabase:
-        print("WSR: no Supabase URL/key found (checked config.json, .env, environment)"
-              " — running local only")
+        log.get().warning("no Supabase URL/key found (checked config.json, .env, environment)"
+                          " — running local only")
         return None
     engine = sync.Sync(_state, sync.Client(settings.supabase_url, settings.supabase_key),
                        me=_me, peer=peer)
     engine.start()
-    print("WSR: syncing with Supabase (credentials from %s)" % settings.source)
+    log.get().info("syncing with Supabase (credentials from %s)", settings.source)
     return engine
 
 
@@ -634,18 +663,18 @@ def main():
         }
         result = setup_ui.run(defaults)
         if result is None:
-            print("WSR: setup cancelled")
+            log.get().info("setup cancelled")
             return 0
         hooks_ok = False
         if result.get("hooks"):
             r = claude_settings.install()
             hooks_ok = r.ok
-            print("WSR: hooks:", r.message)
+            log.get().info("hooks: %s", r.message)
         if result.get("autostart"):
             try:
                 autostart.add()
             except Exception as exc:
-                print("WSR: autostart failed:", exc)
+                log.get().error("autostart failed: %s", exc)
         userconfig.save(
             me=result["me"],
             supabase_url=result["supabase_url"],
@@ -657,7 +686,7 @@ def main():
 
     _me = args.me or settings.me
     if not _me:
-        print("WSR: no --me and no config.json with 'me' set. Run with --setup.")
+        log.get().error("no --me and no config.json with 'me' set. Run with --setup.")
         return 1
     peer = "rifat" if _me == "samee" else "samee"
 
@@ -669,13 +698,13 @@ def main():
 
     if not _listener.try_bind():
         if listener.ping_show(port=port):
-            print("Work•Sleep•Repeat is already running — showed its window.")
+            log.get().info("already running — showed its window")
             return 0
-        print("Port %d is busy but did not answer — is another app using it?" % port)
+        log.get().error("port %d is busy but did not answer — is another app using it?", port)
         return 1
     _listener.start()
-    print("WSR: listening on http://%s:%d  (idle timeout %ds%s)"
-          % (config.LISTEN_HOST, port, idle, ", dev mode" if _dev else ""))
+    log.get().info("listening on http://%s:%d  (idle timeout %ds%s)",
+                   config.LISTEN_HOST, port, idle, ", dev mode" if _dev else "")
 
     _alert_settings = tray.AlertSettings(store=userconfig.save_alerts)
     _alert_settings.load(dict(settings.alerts))       # আগে বন্ধ করা অ্যালার্ট বন্ধই থাকে
@@ -695,7 +724,7 @@ def main():
     pyglet.clock.schedule_interval(state_tick, config.STATE_TICK_SECONDS)  # ডিটেকশন + অ্যালার্ট
 
     _push_status(wall_now())                          # শুরুতেই নিজের অবস্থা জানিয়ে দিই
-    print("WSR: tray ready%s" % (" (started hidden)" if args.tray else ""))
+    log.get().info("tray ready%s", " (started hidden)" if args.tray else "")
 
     try:
         # interval=None → pyglet নিজে রিড্র schedule করে না; আঁকা হয় tick() থেকে (_redraw)

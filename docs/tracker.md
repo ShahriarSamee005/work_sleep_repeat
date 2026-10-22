@@ -2,7 +2,7 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 15 — Setup + autostart (✅ complete) → next: Phase 16 — Package + cleanup
+**Current phase:** 16 — Package + cleanup (✅ complete) → next: Phase 17 — 7-day trial
 **Last updated:** 2026-10-22
 
 ---
@@ -20,10 +20,30 @@
 | 14 | Dibs | ✅ Done | ✅ (manual gate run by Samee) | `675ab7b` |
 | 14b | Dibs percentage + ray cleanup | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
 | 15 | Setup + autostart | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
-| 16 | Package + cleanup | ⬜ Not started | — | — |
+| 16 | Package + cleanup | ✅ Done | ✅ | (see git log) |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 16 results (2026-10-22)
+
+Built: `log.py` (rotating file logger at `%APPDATA%\WorkSleepRepeat\wsr.log`, 1 MB × 3),
+`build.spec` + `build.bat` (PyInstaller --onedir --windowed), `tools/make_icon.py` →
+`WorkSleepRepeat.ico`. All `print("WSR: …")` calls in `main.py`, `listener.py`, `tray.py`
+replaced with `log.get()` calls. Unused `TOGGLE_OFF` constant removed. APP_VERSION → `2.0-phase16`.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 134 passed (unchanged) |
+| `build.bat` → `dist/WorkSleepRepeat/` | ✅ EXE 10 MB, folder 51 MB total |
+| No console window | ✅ `console=False` in build.spec |
+| Rotating log at `%APPDATA%` | ✅ `log.py` creates `wsr.log` with 1 MB × 3 rotation |
+| Console output when running from source | ✅ `log.get()` adds StreamHandler when not frozen |
+| Autostart points at exe | ✅ `autostart._exe_command()` uses `sys.executable` (→ the bundled exe) |
+| Hooks work from packaged app | 🔲 Needs manual test: run the exe, then use Claude Code |
+| Exe runs without Python installed | 🔲 Needs manual test on a clean machine |
 
 ---
 
@@ -253,17 +273,17 @@ real project on 2026-10-21; the gate passed.
 
 | Item | From | Plan |
 |---|---|---|
-| FPS counter prints to terminal | Lab | Now debug-view only (appflow §15); remove in Phase 16 |
+| ~~FPS counter prints to terminal~~ | Lab | ✅ Removed in Phase 14b (debug view deleted) |
 | `Character` keeps its own `today_seconds` / `since` | Phase 10 | `AppState` is the truth now and the panel reads the snapshot; the character's copies are unused. Strip in Phase 11 when sync owns the counter |
 | `clock.fmt_duration` duplicates `panel.format_time` | Phase 10 | Render modules may not import layer 1 (techspec §3). Keep both in step; revisit if the panel ever takes formatted strings |
 | `tests/test_character.py` uses soft `check()` asserts | Lab | A final `test_no_check_failures` now makes pytest see them; convert to plain asserts if the file is touched again |
-| `config.TOGGLE_*` constants unused | Phase 10 | Toggle removed; Phase 14's dibs button reuses that space and those boxes |
+| ~~`config.TOGGLE_*` constants unused~~ | Phase 10 | ✅ `TOGGLE_OFF` removed in Phase 16 |
 | Shared anon key is in `.env` in plain text | Phase 11 | Same risk the security row below covers; fine for two friends, redo before anyone else |
-| No `wsr.log` file yet (techspec §12) | Phase 11 | Sync/listener print to the console. Add the rotating log in Phase 13 with the tray |
+| ~~No `wsr.log` file yet (techspec §12)~~ | Phase 11 | ✅ `log.py` added in Phase 16 — rotating 1 MB × 3 at `%APPDATA%\WorkSleepRepeat\wsr.log` |
 | Visible window costs ~60% of one core | Phase 13 | That is the phase 0–8 immediate-mode renderer at 60 FPS, unchanged since the lab. Hidden is now 1%. If battery matters in the trial, drop to 30 FPS or cache the static layers in Phase 16 |
 | Peer's `today_seconds` only moves on a poll | Phase 11 | It steps every 2 s instead of counting up smoothly. Leave unless it looks jumpy in the trial |
 | `hex_to_rgb` memoized | Lab | Revisit only if palette grows |
-| Debug view redraws unclipped rays (~40 fps in debug) | Lab | Leave; dev tool only |
+| ~~Debug view redraws unclipped rays (~40 fps in debug)~~ | Lab | ✅ Debug view + rays removed in Phase 14b |
 | Untidy commit labels phases 5–6 (`dbe9700`…) | Lab | Leave as is |
 | Shared anon key = anyone with it can change status | v2 design | Must fix before anyone beyond Rifat + Samee |
 

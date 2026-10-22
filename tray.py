@@ -8,6 +8,7 @@ import alerts
 import autostart
 import claude_settings
 import config
+import log
 import sprites
 
 # main থ্রেডকে পাঠানো কমান্ড (উইন্ডো সংক্রান্ত সব কাজ ওখানেই হয়)
@@ -65,14 +66,13 @@ def build_icons():
     # কী করছে: পাঁচটি অবস্থার আইকন একবারে বানিয়ে dict-এ রাখে
     # কেন লাগছে: প্রতি সেকেন্ডে ছবি বানানো অপচয়; অবস্থা বদলালে শুধু তুলে নিই
     # real world-এ এটা কোথায় দেখা যায়: অ্যাসেট প্রি-ক্যাশ করে রাখা
-    lamp = (sprites.TRAY_LAMP, sprites.TRAY_LAMP_COLORS)
-    moon = (sprites.TRAY_MOON, sprites.TRAY_MOON_COLORS)
+    head = (sprites.TRAY_HEAD, sprites.TRAY_HEAD_COLORS)
     return {
-        FREE: _image(*moon),
-        PEER: _image(*lamp),
-        ME: _image(*lamp, overlay=(config.ACCENT, "bottom-right")),
-        CONFLICT: _image(*lamp, overlay=(config.WARNING, "top-right")),
-        OFFLINE: _image(sprites.TRAY_MOON, sprites.TRAY_MOON_OFF_COLORS),
+        FREE: _image(*head),
+        PEER: _image(*head, overlay=(config.ACCENT, "bottom-left")),
+        ME: _image(*head, overlay=(config.ACCENT, "bottom-right")),
+        CONFLICT: _image(*head, overlay=(config.WARNING, "top-right")),
+        OFFLINE: _image(sprites.TRAY_HEAD, sprites.TRAY_HEAD_OFF_COLORS),
     }
 
 
@@ -224,7 +224,7 @@ class Tray:
         try:
             self._icon.notify(body, title)
         except Exception as exc:              # টোস্ট ব্যর্থ হলেও অ্যাপ চলবে
-            print("WSR: toast failed:", exc)
+            log.get().error("toast failed: %s", exc)
 
 
 class AlertSettings:
