@@ -2,8 +2,8 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 14 — Dibs (✅ complete) → next: Phase 15 — Setup + autostart
-**Last updated:** 2026-10-21
+**Current phase:** 15 — Setup + autostart (✅ complete) → next: Phase 16 — Package + cleanup
+**Last updated:** 2026-10-22
 
 ---
 
@@ -17,12 +17,65 @@
 | 11 | Supabase sync | ✅ Done | ✅ (gate run by Samee on the real project) | `b1bd35c` |
 | 12 | ~~Usage limits + split~~ **Dropped** | ⬛ Cut | — | — |
 | 13 | Tray + alerts | ✅ Done | ✅ (manual gate run by Samee) | `74573d0` |
-| 14 | Dibs | ✅ Done | ✅ (manual gate run by Samee) | — |
-| 15 | Setup + autostart | ⬜ Not started | — | — |
+| 14 | Dibs | ✅ Done | ✅ (manual gate run by Samee) | `675ab7b` |
+| 14b | Dibs percentage + ray cleanup | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
+| 15 | Setup + autostart | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
 | 16 | Package + cleanup | ⬜ Not started | — | — |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 15 results (2026-10-22)
+
+Built: `setup_ui.py` (tkinter first-run dialog), `autostart.py` (HKCU Run key), `userconfig.save()`
+(full atomic write), `--setup` flag, tray "Start with Windows" toggle + integration items wired.
+`pytest` green (134 tests, 8 new).
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 134 passed (8 new setup/autostart tests) |
+| Fresh config → setup dialog appears | ✅ Renamed config.json away; `need_setup` triggers correctly when `me` is missing |
+| Test connection works (✓ / readable error) | 🔲 Needs manual test with the tkinter dialog open |
+| Hooks installed from setup | ✅ `claude_settings.py install` / `remove` / `status` round-trip clean |
+| Start with Windows on → registry key written | ✅ `autostart.add()` → `HKCU\...\Run\WorkSleepRepeat` with `--tray`; `is_enabled()` true |
+| Start with Windows off → gone from Run key | ✅ `autostart.remove()` → `is_enabled()` false |
+| Tray Remove hooks → settings.json back to pre-install | ✅ remove then status shows none, reinstall works |
+| Tray Reinstall hooks works | ✅ All six events back after reinstall |
+| Setup never runs while pyglet window exists | ✅ Runs before `make_window()` in `main()` |
+| `--setup` forces the dialog | ✅ Logic verified: `need_setup = args.setup or not settings.me` |
+| After-reboot app in tray | 🔲 Needs manual reboot test |
+
+---
+
+## Phase 14b results (2026-10-22)
+
+**Step A — debug cleanup (commit `afba175`):** removed D/G key debug view, grid overlay, debug
+ray coloring (red/green), Bezier curve visualization, clip rectangle display, FPS counter, and
+`--debug` snapshot flag. `bezier_points` dead code also removed. `SMALL_FONT` alias kept
+(`_draw_plaques` uses it).
+
+**Step B — dibs percentage:** added `wants_next_pct` through the full stack: `PersonView`,
+`AppState` (set/clear on arm/disarm/expire/work-start), `sync.py` (outgoing payload + peer
+parsing), `panel.py` (slider with handle + "NN%" readout, "keep NN% — cancel" button text,
+peer card shows "70%" instead of "next", sub-status "keep NN% for me"), `main.py` (mouse
+drag, slider click, toggle passes pct). Migration SQL applied to Supabase. `schema.sql` updated
+to match. `pytest` green (126 tests, 10 new pct tests).
+
+**Ray line removal:** `draw_rays()`, `_ray_endpoints()`, `_draw_ray_cells()` and dead imports
+(`math`, `bresenham_line`, `cohen_sutherland`) removed from `lighting.py`. The call in
+`_draw_room` removed. Soft glow (`draw_glow`) and darkness overlay untouched.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 126 passed (10 new pct tests) |
+| Slider snaps to 10s, readout updates live | ✅ Tick marks removed per user request; "NN%" above handle |
+| Calling dibs sends the shown number | ✅ `wants_next_pct` in `status_fields` payload |
+| Peer sees "keep NN% for me" | ✅ Sub-status line + card shows "NN%" |
+| No diagonal lines in normal view | ✅ `draw_rays` fully removed; grep returns nothing in `.py` files |
+| Lamp still has soft glow | ✅ `draw_glow` (scanline circles) and `draw_darkness` untouched |
+| Debug view fully gone | ✅ D/G keys removed, no `_debug`/`_grid` globals, no FPS counter |
 
 ---
 
@@ -175,6 +228,9 @@ real project on 2026-10-21; the gate passed.
 | 2026-10-21 | `pyglet.app.run(interval=None)`; we draw from the tick ourselves | pyglet's own 60 Hz redraw runs even when the window is hidden — measured **23%** of a core in the tray. Drawing only from the animation tick (which is unscheduled while hidden) drops it to **1%** | — |
 | 2026-10-21 | "It's free" is suppressed while I am working | techspec §9 says only "peer true → false", but if I am already using Claude the news is noise, and the conflict toast covers that case | techspec §9 (noted) |
 | 2026-10-21 | "Call dibs" and "Start with Windows" are disabled menu placeholders | Dibs is Phase 14 and `autostart.py` is Phase 15; showing them greyed keeps the menu shape honest | techspec §9 |
+| 2026-10-22 | `--me` is no longer required on the CLI | config.json now provides the identity; `--me` overrides it, `--setup` forces the dialog | techspec §11 |
+| 2026-10-22 | Setup dialog runs before the pyglet window | tkinter and pyglet both want to own the event loop; running tkinter first and destroying it fully avoids conflict | — |
+| 2026-10-22 | `userconfig.save()` does atomic write (temp + replace) | Same pattern as `save_alerts`; prevents half-written config on crash | techspec §10 |
 | 2026-10-21 | Pillow moved from `requirements-dev.txt` to `requirements.txt` | pystray needs it at runtime to build the tray icon, so it is no longer dev-only | — |
 | 2026-10-20 | `schema.sql` drops the usage tables and `wsr_report_usage`/`wsr_credit` | Usage was cut; only `wsr_status`, `wsr_update_status` and `wsr_get_state` are created, so the anon surface stays as small as possible | techspec §6 (noted inline) |
 | 2026-10-20 | Panel says "You are working", not "You're working" | This bitmap font draws the apostrophe as a slanted tick ("You´re"); the wording change is cheaper than hand-editing a glyph | design §2.1 |

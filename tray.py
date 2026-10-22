@@ -5,6 +5,7 @@ import pystray
 from PIL import Image
 
 import alerts
+import autostart
 import claude_settings
 import config
 import sprites
@@ -123,7 +124,8 @@ class Tray:
             pystray.Menu.SEPARATOR,
             # dibs: লেখা ও সক্রিয়তা মেনু খোলার সময় ঠিক হয় (প্যানেলের বাটনের মতোই নিয়ম)
             pystray.MenuItem(self._dibs_label, self._send(DIBS), enabled=self._dibs_enabled),
-            pystray.MenuItem("Start with Windows", None, enabled=False),   # Phase 15
+            pystray.MenuItem("Start with Windows", self._toggle_autostart,
+                           checked=lambda item: autostart.is_enabled()),
             pystray.MenuItem("Alerts", pystray.Menu(*alert_items)),
             pystray.MenuItem("Claude Code integration", integration),
             pystray.Menu.SEPARATOR,
@@ -161,6 +163,17 @@ class Tray:
             if self.settings is not None:
                 self.settings.toggle(kind)      # ফাইলে সেভ হয়, তাই রিস্টার্টেও মনে থাকে
         return handler
+
+    def _toggle_autostart(self, icon=None, item=None):
+        try:
+            if autostart.is_enabled():
+                autostart.remove()
+                self.notify("Autostart", "Removed from Windows startup.")
+            else:
+                autostart.add()
+                self.notify("Autostart", "Will start with Windows (hidden in tray).")
+        except Exception as exc:
+            self.notify("Autostart", "Failed: %s" % str(exc)[:160])
 
     def _hooks(self, action):
         # কী করছে: মেনু থেকে claude_settings-এর install/remove চালায় ও ফল টোস্টে জানায়

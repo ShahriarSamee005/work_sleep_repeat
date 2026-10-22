@@ -269,6 +269,14 @@ Read first: `docs/techspec.md` §6.1 (`wants_next*`), §9, `docs/appflow.md` §8
 `pytest`, then the Phase 14 gate from `docs/plan.md` as a numbered checklist. Update `docs/tracker.md`. Stop after this phase.
 ````
 
+### Phase 14b — Dibs percentage + debug cleanup (2026-10-22)
+
+**Step A:** removed lab debug view (D/G keys, grid overlay, debug ray coloring, Bezier viz, clip rect, FPS counter, `--debug` flag).
+
+**Step B:** added `wants_next_pct` (0–100, step 10, default 50) — slider on dibs card, Supabase column + RPC, peer display ("keep NN% for me"), clear rules. Diagonal ray lines (`draw_rays`) removed from the normal render path; glow untouched.
+
+All 126 tests pass. See `tracker.md` for full results.
+
 ---
 
 ## Phase 15 — Setup + autostart

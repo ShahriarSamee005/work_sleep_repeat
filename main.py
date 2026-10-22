@@ -32,7 +32,9 @@ from pyglet.window import mouse as pyglet_mouse
 
 import activity
 import alerts
+import autostart
 import character
+import claude_settings
 import clock
 import config
 import font
@@ -40,6 +42,7 @@ import lighting
 import listener
 import panel
 import room
+import setup_ui
 import sprites
 import state
 import sync
@@ -115,9 +118,8 @@ def parse_args():
     )
     parser.add_argument(
         "--me",
-        required=True,
         choices=("samee", "rifat"),
-        help="who is running this app (samee or rifat)",
+        help="who is running this app (samee or rifat); defaults to config.json",
     )
     parser.add_argument(
         "--offline",
@@ -128,6 +130,11 @@ def parse_args():
         "--tray",
         action="store_true",
         help="start hidden in the tray (used by autostart)",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="force the first-run dialog",
     )
     parser.add_argument(
         "--dev",
@@ -607,14 +614,52 @@ def main():
     #           দুটি টিক schedule করে ও মেইন লুপে ঢোকে; শেষে listener বন্ধ করে
     # কেন লাগছে: appflow §2-এর স্টার্টআপ ক্রম — bind → state → থ্রেড → উইন্ডো → লুপ
     # real world-এ এটা কোথায় দেখা যায়: সব GUI প্রোগ্রামের main()/entry point এভাবেই সেটআপ করে
-    args = parse_args()  # ভুল --me হলে argparse এখানেই usage দেখিয়ে বেরিয়ে যায়
+    args = parse_args()
     global _me, _window, _state, _activity, _listener, _dev, _sync, _tray, _alert_settings
     global _animating
-    _me = args.me        # আমার হুক এই জনের status চালায়; অন্যজন সঙ্গী (peer)
     _dev = args.dev
-    peer = "rifat" if _me == "samee" else "samee"
     port = config.LISTEN_PORT if args.port is None else args.port
     idle = config.IDLE_TIMEOUT if args.idle is None else args.idle
+
+    settings = userconfig.load(me=args.me)
+    need_setup = args.setup or not settings.me
+
+    if need_setup:
+        defaults = {
+            "me": settings.me or "samee",
+            "supabase_url": settings.supabase_url,
+            "supabase_key": settings.supabase_key,
+            "hooks": True,
+            "autostart": True,
+        }
+        result = setup_ui.run(defaults)
+        if result is None:
+            print("WSR: setup cancelled")
+            return 0
+        hooks_ok = False
+        if result.get("hooks"):
+            r = claude_settings.install()
+            hooks_ok = r.ok
+            print("WSR: hooks:", r.message)
+        if result.get("autostart"):
+            try:
+                autostart.add()
+            except Exception as exc:
+                print("WSR: autostart failed:", exc)
+        userconfig.save(
+            me=result["me"],
+            supabase_url=result["supabase_url"],
+            supabase_key=result["supabase_key"],
+            hooks_installed=hooks_ok if result.get("hooks") else None,
+            autostart=result.get("autostart", False),
+        )
+        settings = userconfig.load(me=args.me)
+
+    _me = args.me or settings.me
+    if not _me:
+        print("WSR: no --me and no config.json with 'me' set. Run with --setup.")
+        return 1
+    peer = "rifat" if _me == "samee" else "samee"
 
     _state = state.AppState(_me, peer, wall_now())
     _activity = activity.Activity(idle_timeout=idle)
@@ -622,7 +667,7 @@ def main():
                                   on_show=lambda: _commands.put(tray.SHOW),
                                   port=port)
 
-    if not _listener.try_bind():          # পোর্ট দখল = আরেকটি কপি চলছে (appflow §2)
+    if not _listener.try_bind():
         if listener.ping_show(port=port):
             print("Work•Sleep•Repeat is already running — showed its window.")
             return 0
@@ -632,7 +677,6 @@ def main():
     print("WSR: listening on http://%s:%d  (idle timeout %ds%s)"
           % (config.LISTEN_HOST, port, idle, ", dev mode" if _dev else ""))
 
-    settings = userconfig.load(me=_me)
     _alert_settings = tray.AlertSettings(store=userconfig.save_alerts)
     _alert_settings.load(dict(settings.alerts))       # আগে বন্ধ করা অ্যালার্ট বন্ধই থাকে
     _sync = _start_sync(args.offline, peer, settings)

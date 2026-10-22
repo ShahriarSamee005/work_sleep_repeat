@@ -9,17 +9,35 @@ CONFIG_NAME = "config.json"
 ENV_NAME = ".env"
 
 
+def _atomic_write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def save_alerts(values, path=None):
-    # কী করছে: config.json-এ শুধু "alerts" অংশটি লেখে — বাকি চাবি (me, credentials…) অবিকৃত রেখে
-    # কেন লাগছে: ট্রে থেকে অ্যালার্ট বন্ধ করলে রিস্টার্টের পরেও বন্ধ থাকতে হবে (Phase 13 gate)
-    # real world-এ এটা কোথায় দেখা যায়: সেটিংস ফাইলের একটি অংশ আপডেট করা (পুরোটা ওভাররাইট নয়)
     path = Path(path) if path is not None else config_path()
     data = _read_json(path)
     data["alerts"] = dict(values)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")      # temp + replace = অর্ধেক লেখা ফাইল কখনো থাকবে না
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    _atomic_write(path, data)
+    return path
+
+
+def save(me, supabase_url, supabase_key, alerts=None, hooks_installed=None,
+         autostart=None, path=None):
+    path = Path(path) if path is not None else config_path()
+    data = _read_json(path)
+    data["me"] = me
+    data["supabase_url"] = supabase_url
+    data["supabase_key"] = supabase_key
+    if alerts is not None:
+        data["alerts"] = dict(alerts)
+    if hooks_installed is not None:
+        data["hooks_installed"] = hooks_installed
+    if autostart is not None:
+        data["autostart"] = autostart
+    _atomic_write(path, data)
     return path
 
 
