@@ -2,7 +2,7 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 16 — Package + cleanup (✅ complete) → next: Phase 17 — 7-day trial
+**Current phase:** 16b — Character-head icon + Zoro/Sanji skins (✅ complete) → next: Phase 17 — 7-day trial
 **Last updated:** 2026-10-22
 
 ---
@@ -21,9 +21,36 @@
 | 14b | Dibs percentage + ray cleanup | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
 | 15 | Setup + autostart | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
 | 16 | Package + cleanup | ✅ Done | ✅ | (see git log) |
+| 16b | Character-head icon + Zoro/Sanji skins | ✅ Done | ✅ | (see git log) |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 16b results (2026-10-22)
+
+**Step A — character-head icon:** Created `TRAY_HEAD` 16×16 sprite in `sprites.py` using the
+character's front-facing head shape. Tray icon (all 5 states), taskbar/Alt-Tab icon
+(`window.set_icon`), and `.ico` for the exe all use the character head. One shared icon,
+not per-person.
+
+**Step B — Zoro/Sanji colour skins:** Added `H` (hair), `C` (clothes), `c` (clothes shadow)
+cells to all character sprite grids. Per-person colour dicts in `sprites.py`
+(`CHAR_COLORS_SAMEE`, `CHAR_COLORS_RIFAT`), hex values in `config.py`.
+Samee = green hair + dark teal (Zoro); Rifat = blond hair + near-black suit (Sanji).
+`Character.__init__` takes a `colors` dict; `draw_sitting` also parameterized.
+Body shape, animation, proportions unchanged — colour swap only.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 134 passed |
+| Tray icon is the character head | 🔲 Needs visual check |
+| Taskbar / Alt-Tab icon is the character head | 🔲 Needs visual check |
+| Exe shows the character head after rebuild | 🔲 Needs rebuild + visual check |
+| Both rooms animate exactly as before | 🔲 Needs visual check |
+| Rifat = blond + dark suit; Samee = green + teal | 🔲 Needs visual check |
+| No colour bleeding into skin, eyes, furniture | 🔲 Needs visual check |
 
 ---
 

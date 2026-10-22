@@ -348,6 +348,14 @@ Give me the Phase 16 gate from `docs/plan.md` as a numbered checklist, including
 
 ---
 
+## Phase 16b — Character-head icon + Zoro/Sanji room skins (2026-10-22)
+
+**Step A:** Replaced lamp/moon tray icon with character head sprite (`TRAY_HEAD` 16×16). Same head used for taskbar (`window.set_icon`), exe icon, and all tray states (with overlay dots for status).
+
+**Step B:** Added hair (`H`) and clothes (`C`/`c`) cells to all character sprite grids. Per-person color dicts: Samee = Zoro (green hair, teal clothes), Rifat = Sanji (blond hair, dark suit). Shape/animation unchanged.
+
+---
+
 ## Phase 17 — 7-day trial
 
 **Goal:** PRD §6 success criteria.
