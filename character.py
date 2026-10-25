@@ -18,7 +18,7 @@ STANDING_UP = "STANDING_UP"
 WALKING_TO_BED = "WALKING_TO_BED"
 LYING_DOWN = "LYING_DOWN"
 
-_STAND_H = len(sprites.STAND)     # দাঁড়ানো স্প্রাইটের উচ্চতা (পায়ের pivot বের করতে)
+_STAND_H = len(sprites.ZORO_STAND)     # 13 — সব STAND স্প্রাইটের উচ্চতা একই
 
 
 def _lerp(a, b, t):
@@ -28,13 +28,10 @@ def _lerp(a, b, t):
     return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
 
 
-def draw_sitting(time_now, colors=None):
-    # কী করছে: ডেস্কে বসা ভঙ্গি আঁকছে (হাত → শরীর → মাথা) এবং time_now দেখে টাইপিং-এ এক হাত ১px উপরে তোলে
-    # কেন লাগছে: WORKING অবস্থায় ক্যারেক্টার বসে টাইপ করছে দেখাতে; হাত পাল্টে নড়াচড়ার ভাব আসে
-    # real world-এ এটা কোথায় দেখা যায়: গেমে সময় অনুযায়ী frame বেছে নিয়ে অ্যানিমেশন (keyframe by time)
-    phase = int(time_now / config.TYPE_INTERVAL) % 2   # প্রতি TYPE_INTERVAL-এ 0/1 পাল্টায়
-    left_up = 1 if phase == 0 else 0                    # phase 0 → বাঁ হাত উপরে
-    right_up = 1 if phase == 1 else 0                   # phase 1 → ডান হাত উপরে (y ছোট = উপরে)
+def draw_sitting(time_now, colors, char_sprites):
+    phase = int(time_now / config.TYPE_INTERVAL) % 2
+    left_up = 1 if phase == 0 else 0
+    right_up = 1 if phase == 1 else 0
 
     draw_rect(*config.SIT_ARM_L_OUTLINE, config.OUTLINE)
     draw_rect(*config.SIT_ARM_R_OUTLINE, config.OUTLINE)
@@ -48,18 +45,15 @@ def draw_sitting(time_now, colors=None):
     draw_rect(hrx, hry - right_up, hrw, hrh, config.OUTLINE)
     draw_pixel(config.SIT_HAND_R_SKIN[0], config.SIT_HAND_R_SKIN[1] - right_up, config.SKIN)
 
-    c = colors or sprites.CHAR_COLORS
-    draw_sprite(*config.SIT_BODY_POS, sprites.BODY_BACK, c)
-    draw_sprite(*config.SIT_HEAD_POS, sprites.HEAD_BACK, c)
+    draw_sprite(*config.SIT_BODY_POS, char_sprites["BODY_BACK"], colors)
+    draw_sprite(*config.SIT_HEAD_POS, char_sprites["HEAD_BACK"], colors)
 
 
 class Character:
-    def __init__(self, name, colors=None):
-        # কী করছে: একটি ক্যারেক্টার তৈরি করছে, শুরুতে বিছানায় ঘুমন্ত অবস্থায়
-        # কেন লাগছে: Samee ও Rifat দুজনের জন্য আলাদা অবজেক্ট; সব per-user state এখানে থাকে
-        # real world-এ এটা কোথায় দেখা যায়: গেমে প্রতিটি চরিত্র নিজের state নিয়ে আলাদা অবজেক্ট
+    def __init__(self, name, colors=None, char_sprites=None):
         self.name = name
-        self.colors = colors or sprites.CHAR_COLORS
+        self.colors = colors or sprites.CHAR_COLORS_SAMEE
+        self.sprites = char_sprites or sprites.CHAR_SPRITES_SAMEE
         self.state = IN_BED
         self.progress = 0.0        # 0..1, বর্তমান state-এর ভেতরে অগ্রগতি
         self.target_working = False
@@ -214,19 +208,13 @@ class Character:
         return config.HEAD_SLEEP_POS          # IN_BED
 
     def _walk_sprite(self, time_now):
-        # কী করছে: হাঁটার সময় STEP_INTERVAL-এ WALK_A/WALK_B পাল্টায় ও facing অনুযায়ী front/back বাছে
-        # কেন লাগছে: পা নড়ার ভাব ও সঠিক দিক (পিঠ/সামনে) দেখাতে
-        # real world-এ এটা কোথায় দেখা যায়: sprite-sheet অ্যানিমেশনে সময় ধরে frame বদল
         frame = int(time_now / config.STEP_INTERVAL) % 2
         if self.moving_up:
-            return (sprites.WALK_A_BACK if frame == 0 else sprites.WALK_B_BACK)
-        return (sprites.WALK_A if frame == 0 else sprites.WALK_B)
+            return (self.sprites["WALK_A_BACK"] if frame == 0 else self.sprites["WALK_B_BACK"])
+        return (self.sprites["WALK_A"] if frame == 0 else self.sprites["WALK_B"])
 
     def _stand_sprite(self):
-        # কী করছে: দাঁড়ানো স্প্রাইট front না back, facing অনুযায়ী দেয়
-        # কেন লাগছে: ওঠা/বসা/শোয়ার সময় সঠিক দিকে মুখ/পিঠ দেখাতে
-        # real world-এ এটা কোথায় দেখা যায়: চরিত্রের direction অনুযায়ী sprite নির্বাচন
-        return sprites.STAND_BACK if self.moving_up else sprites.STAND
+        return self.sprites["STAND_BACK"] if self.moving_up else self.sprites["STAND"]
 
     def draw(self, time_now):
         # কী করছে: বর্তমান state অনুযায়ী সঠিক স্প্রাইট আঁকে — ঘুম, বসা+টাইপিং, হাঁটা(bob), বা বসা/ওঠা(squash)
@@ -234,10 +222,10 @@ class Character:
         # real world-এ এটা কোথায় দেখা যায়: চরিত্রের current animation state রেন্ডার করা
         s = self.state
         if s == IN_BED:
-            draw_sprite(*config.HEAD_SLEEP_POS, sprites.HEAD_SLEEP, self.colors)
+            draw_sprite(*config.HEAD_SLEEP_POS, self.sprites["HEAD_SLEEP"], self.colors)
             return
         if s == WORKING:
-            draw_sitting(time_now, self.colors)
+            draw_sitting(time_now, self.colors, self.sprites)
             return
 
         x, y = self.position()

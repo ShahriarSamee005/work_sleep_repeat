@@ -60,7 +60,7 @@ PUSH_WHILE_WORKING = 60         # কাজ চলার সময় প্র�
 BACKOFF_SECONDS = (2, 4, 8, 16, 30)   # পরপর ব্যর্থতায় অপেক্ষার ক্রম (শেষ মানটিই সর্বোচ্চ)
 FAILURES_BEFORE_OFFLINE = 2     # এতবার পরপর ব্যর্থ হলে প্যানেলে "offline" দেখাই (appflow §10)
 TIME_JUMP_SECONDS = 30          # লুপের দুই চক্রে এত ফাঁক = পিসি ঘুমিয়েছিল → তৎক্ষণাৎ reconnect
-APP_VERSION = "2.0-phase16"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
+APP_VERSION = "2.0-phase18"     # সার্ভারে app_version ফিল্ডে যায় (কে কোন বিল্ড চালাচ্ছে)
 
 # ট্রে ও অ্যালার্ট (techspec §9 / design §4–5; Phase 13)
 CONFLICT_AFTER = 30             # দুজনে একসাথে এত সেকেন্ড কাজ করলে তবেই দ্বন্দ্বের টোস্ট (appflow §9)

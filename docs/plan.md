@@ -21,7 +21,8 @@
 | 14 | Dibs | dibs button, bubble, toasts | 13 |
 | 15 | Setup + autostart | first-run dialog, safe settings merge UI, start with Windows | 14 |
 | 16 | Package + cleanup | PyInstaller build running on both PCs | 15 |
-| 17 | 7-day trial | real daily use, bugs fixed, PRD §6 met | 16 |
+| 18 | Per-character sprites | Zoro/Sanji pixel art per person | 16b |
+| 17 | 7-day trial | real daily use, bugs fixed, PRD §6 met | 18 |
 
 > **Phase numbers kept as-is** though 12 is cut, so references stay stable. Phase 13 now depends on 11. Usage bars, split, status-line text and "limit" alerts are gone everywhere.
 
@@ -353,6 +354,16 @@ Give me the Phase 16 gate from `docs/plan.md` as a numbered checklist, including
 **Step A:** Replaced lamp/moon tray icon with character head sprite (`TRAY_HEAD` 16×16). Same head used for taskbar (`window.set_icon`), exe icon, and all tray states (with overlay dots for status).
 
 **Step B:** Added hair (`H`) and clothes (`C`/`c`) cells to all character sprite grids. Per-person color dicts: Samee = Zoro (green hair, teal clothes), Rifat = Sanji (blond hair, dark suit). Shape/animation unchanged.
+
+---
+
+## Phase 18 — Per-character Zoro/Sanji sprites (2026-10-23)
+
+Sprite grids are now per-person, not just colors. Zoro (Samee) gets a scar, bare torso with
+haramaki belt, dark pants. Sanji (Rifat) gets one eye covered by hair, suit jacket with blue
+collar and yellow buttons. Each character has its own full sprite set. Composites use the same
+row indices. `Character` takes a `char_sprites` dict. All dimensions preserved (STAND 9×13,
+HEAD_* 9×7, BODY_BACK 10×5, legs 9×2).
 
 ---
 

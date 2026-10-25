@@ -2,8 +2,8 @@
 
 > Update at the end of every phase: status, gate results, decisions, bugs. Newest entries at the top of each log.
 
-**Current phase:** 16b — Character-head icon + Zoro/Sanji skins (✅ complete) → next: Phase 17 — 7-day trial
-**Last updated:** 2026-10-22
+**Current phase:** 18 — Per-character Zoro/Sanji sprites (✅ complete) → next: Phase 17 — 7-day trial
+**Last updated:** 2026-10-23
 
 ---
 
@@ -22,9 +22,40 @@
 | 15 | Setup + autostart | ✅ Done | ✅ (manual gate run by Samee) | (see git log) |
 | 16 | Package + cleanup | ✅ Done | ✅ | (see git log) |
 | 16b | Character-head icon + Zoro/Sanji skins | ✅ Done | ✅ | (see git log) |
+| 18 | Per-character Zoro/Sanji sprites | ✅ Done | ✅ | (see git log) |
 | 17 | 7-day trial | ⬜ Not started | — | — |
 
 Legend: ⬜ not started · 🟨 in progress · 🟥 blocked · ✅ done
+
+---
+
+## Phase 18 results (2026-10-23)
+
+Sprite GRIDS are now per-person. Phase 16b had shared grids with per-person colour dicts;
+Phase 18 gives each character unique pixel art: **Zoro** (Samee) has a scar, bare torso,
+haramaki belt, dark pants. **Sanji** (Rifat) has one eye covered by hair, suit jacket with
+blue collar and yellow buttons. Each character has its own HEAD_SLEEP, HEAD_BACK, BODY_BACK,
+STAND, and walk leg grids. Composites (WALK_A/B, STAND_BACK, WALK_A/B_BACK) are built per-person
+with the same row indices as before.
+
+Colour dicts now inline hex values (no longer reference `config.*` constants) and include
+new keys: `G` (haramaki), `x` (scar) for Zoro; `b` (blue collar), `y` (yellow buttons) for Sanji.
+`S` (skin shadow) changed from lavender `#b9b1d9` to warm `#cdbfa0` for both.
+
+`Character.__init__` now takes `char_sprites` (a dict of grid name → grid list).
+`draw_sitting` parameterized to use per-person BODY_BACK and HEAD_BACK.
+Sitting hand pixels remain skin-coloured (W) via `config.SKIN`/`config.SKIN_S`.
+All dimensions preserved: STAND 9×13, HEAD_* 9×7, BODY_BACK 10×5, legs 9×2.
+
+| Check | Result |
+|---|---|
+| `pytest` | ✅ 134 passed |
+| Sleeping: distinct heads per room | ✅ Green hair (Zoro) vs blond (Sanji) |
+| Working (back view): distinct bodies | ✅ Skin+haramaki+pants vs all-dark suit |
+| Walking: correct sprites, smooth animation | ✅ Contact sheets verified for both |
+| Sitting: hand pixels stay skin W | ✅ `config.SKIN` / `config.SKIN_S` unchanged |
+| No composite row-index breakage | ✅ Dimension check script verified all grids |
+| Exe rebuild | 🔲 App running, DLL locked — rebuild after restart |
 
 ---
 

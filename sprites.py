@@ -1,112 +1,150 @@
 import config
 
-# ক্যারেক্টার স্প্রাইটের সাধারণ legend:
-#   '#' = OUTLINE, 'W' = SKIN, 'S' = SKIN_S,
-#   'H' = hair, 'C' = clothes, 'c' = clothes shadow, '.' = transparent
-CHAR_COLORS = {
-    "#": config.OUTLINE,
-    "W": config.SKIN,
-    "S": config.SKIN_S,
-    "H": config.SKIN,
-    "C": config.SKIN,
-    "c": config.SKIN_S,
-}
+# ---- Per-character sprite grids (Phase 18) ----
+# Legend: '#'=OUTLINE 'W'=SKIN 'S'=SKIN_S 'H'=hair 'C'=clothes 'c'=clothes shadow '.'=transparent
+# Zoro extras: 'G'=haramaki 'r'=red eye   Sanji extras: 'b'=blue collar 'y'=yellow buttons
+
+# ---------- SAMEE = ZORO ----------
+
+ZORO_STAND = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#HW#WrWH#",
+    "#WWWWWWW#",
+    ".#WWWWW#.",
+    "..#WWW#..",
+    "#WWWWWWW#",
+    "#WWWWWWW#",
+    "#GGGGGGG#",
+    "#CCCCCCC#",
+    "#CC#.#CC#",
+    "#CC#.#CC#",
+]
+ZORO_HEAD_SLEEP = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#W##W##S#",
+    "#WWWWWWS#",
+    ".#WWWWS#.",
+    "..#####..",
+]
+ZORO_HEAD_BACK = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#HHHHHHH#",
+    "#HHHHHHH#",
+    ".#HHHHH#.",
+    "..#####..",
+]
+ZORO_BODY_BACK = [
+    "#WWWWWWWW#",
+    "#WWWWWWWW#",
+    "#GGGGGGGG#",
+    "#CCCCCCCC#",
+    "#CCCCCCCC#",
+]
+_ZORO_WALK_A_LEGS = ["#CCC.#CC#", "#CC#.#CC#"]
+_ZORO_WALK_B_LEGS = ["#CC#.CCC#", "#CC#.#CC#"]
+
+ZORO_WALK_A = ZORO_STAND[:11] + _ZORO_WALK_A_LEGS
+ZORO_WALK_B = ZORO_STAND[:11] + _ZORO_WALK_B_LEGS
+ZORO_STAND_BACK = ZORO_HEAD_BACK + ZORO_STAND[7:]
+ZORO_WALK_A_BACK = ZORO_HEAD_BACK + ZORO_WALK_A[7:]
+ZORO_WALK_B_BACK = ZORO_HEAD_BACK + ZORO_WALK_B[7:]
 
 CHAR_COLORS_SAMEE = {
-    "#": config.OUTLINE,
-    "W": config.SKIN,
-    "S": config.SKIN_S,
-    "H": config.SAMEE_HAIR,
-    "C": config.SAMEE_CLOTHES,
-    "c": config.SAMEE_CLOTHES_S,
+    "#": "#231c2b", "W": "#f4f2ee", "S": "#cdbfa0",
+    "H": "#4a7a5a",
+    "G": "#2e7d52",
+    "C": "#20202a", "c": "#15151c",
+    "r": "#c0392b",
 }
+
+CHAR_SPRITES_SAMEE = {
+    "STAND": ZORO_STAND,
+    "STAND_BACK": ZORO_STAND_BACK,
+    "WALK_A": ZORO_WALK_A,
+    "WALK_B": ZORO_WALK_B,
+    "WALK_A_BACK": ZORO_WALK_A_BACK,
+    "WALK_B_BACK": ZORO_WALK_B_BACK,
+    "HEAD_SLEEP": ZORO_HEAD_SLEEP,
+    "HEAD_BACK": ZORO_HEAD_BACK,
+    "BODY_BACK": ZORO_BODY_BACK,
+}
+
+# ---------- RIFAT = SANJI ----------
+
+SANJI_STAND = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#HHHHW#W#",
+    "#HWWWWWW#",
+    ".#WWWWW#.",
+    "..#WWW#..",
+    "#CCbCbCC#",
+    "#CCyCyCC#",
+    "#CCCCCCC#",
+    "#CCCCCCC#",
+    "#CC#.#CC#",
+    "#CC#.#CC#",
+]
+SANJI_HEAD_SLEEP = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#W##W##S#",
+    "#WWWWWWS#",
+    ".#WWWWS#.",
+    "..#####..",
+]
+SANJI_HEAD_BACK = [
+    "..#####..",
+    ".#HHHHH#.",
+    "#HHHHHHH#",
+    "#HHHHHHH#",
+    "#HHHHHHH#",
+    ".#HHHHH#.",
+    "..#####..",
+]
+SANJI_BODY_BACK = [
+    "#CCCCCCCC#",
+    "#CCCCCCCC#",
+    "#CCCCCCCC#",
+    "#CCCCCCCC#",
+    "#CCCCCCCC#",
+]
+_SANJI_WALK_A_LEGS = ["#CCC.#CC#", "#CC#.#CC#"]
+_SANJI_WALK_B_LEGS = ["#CC#.CCC#", "#CC#.#CC#"]
+
+SANJI_WALK_A = SANJI_STAND[:11] + _SANJI_WALK_A_LEGS
+SANJI_WALK_B = SANJI_STAND[:11] + _SANJI_WALK_B_LEGS
+SANJI_STAND_BACK = SANJI_HEAD_BACK + SANJI_STAND[7:]
+SANJI_WALK_A_BACK = SANJI_HEAD_BACK + SANJI_WALK_A[7:]
+SANJI_WALK_B_BACK = SANJI_HEAD_BACK + SANJI_WALK_B[7:]
 
 CHAR_COLORS_RIFAT = {
-    "#": config.OUTLINE,
-    "W": config.SKIN,
-    "S": config.SKIN_S,
-    "H": config.RIFAT_HAIR,
-    "C": config.RIFAT_CLOTHES,
-    "c": config.RIFAT_CLOTHES_S,
+    "#": "#231c2b", "W": "#f4f2ee", "S": "#cdbfa0",
+    "H": "#ffcf33",
+    "C": "#1a1a22", "c": "#101016",
+    "b": "#3f82c8",
+    "y": "#ffcf33",
 }
 
-# HEAD_SLEEP (9×7) — ঘুমন্ত মাথা; ৪ নম্বর সারিতে বন্ধ চোখ, উপরে গোল মাথা
-HEAD_SLEEP = [
-    "..#####..",
-    ".#HHHHH#.",
-    "#HHHHHHH#",
-    "#W##W##S#",   # বন্ধ চোখ
-    "#WWWWWWS#",
-    ".#WWWWS#.",
-    "..#####..",
-]
-HEAD_SLEEP_COLORS = CHAR_COLORS
-
-# HEAD_BACK (9×7) — পেছন থেকে মাথা (বসে কাজ করার সময়); চোখ নেই
-HEAD_BACK = [
-    "..#####..",
-    ".#HHHHH#.",
-    "#HHHHHHh#",
-    "#HHHHHHh#",
-    "#HHHHHhh#",
-    ".#Hhhhh#.",
-    "..#####..",
-]
-HEAD_BACK_COLORS = CHAR_COLORS
-
-# BODY_BACK (10×5) — পেছন থেকে কাঁধ/পিঠ
-BODY_BACK = [
-    "#CCCCCCCc#",
-    "#CCCCCCCc#",
-    "#CCCCCCcc#",
-    ".#CCCccc#.",
-    ".########.",
-]
-BODY_BACK_COLORS = CHAR_COLORS
-
-# STAND (9×13) — দাঁড়ানো পূর্ণ শরীর
-STAND = [
-    "..#####..",
-    ".#HHHHH#.",
-    "#HHHHHHH#",
-    "#W#WW#WS#",
-    "#WWWWWWS#",
-    ".#WWWWS#.",
-    "..#####..",
-    ".#CCCCc#.",
-    ".#CCCCc#.",
-    ".#CCCcc#.",
-    ".#CC#cc#.",
-    ".#C#.#c#.",
-    ".##..##..",
-]
-
-# WALK_A / WALK_B — STAND-এর সাথে শুধু শেষ ২ সারি (পা) বদলায়; হাঁটার সময় ০.১৫s অন্তর অদলবদল
-# নোট: design §7-এ WALK_A-এর পা সারি ভুলে ১০ চওড়া (STAND ৯ চওড়া); trailing '.' বাদ দিয়ে ৯-এ মিলিয়েছি।
-_WALK_A_LEGS = [
-    ".#C#..#c#",
-    ".##...##.",
-]
-_WALK_B_LEGS = [
-    ".##..#c#.",
-    ".....##..",
-]
-WALK_A = STAND[:11] + _WALK_A_LEGS
-WALK_B = STAND[:11] + _WALK_B_LEGS
-
-STAND_COLORS = CHAR_COLORS
-WALK_A_COLORS = CHAR_COLORS
-WALK_B_COLORS = CHAR_COLORS
-
-# পিছন-দিক (back view) স্প্রাইট — একই শরীর/পা, কিন্তু মাথায় HEAD_BACK (মুখ নেই)।
-# design fix: উপরে (dy < 0) হাঁটলে পিঠ দেখা যায়, তাই এই ভার্সন ব্যবহার হয়।
-# STAND-এর প্রথম ৭ সারি = মাথা; সেগুলো HEAD_BACK দিয়ে বদলে বাকি (পা) অংশ রেখে দিই।
-STAND_BACK = HEAD_BACK + STAND[7:]
-WALK_A_BACK = HEAD_BACK + WALK_A[7:]
-WALK_B_BACK = HEAD_BACK + WALK_B[7:]
-STAND_BACK_COLORS = CHAR_COLORS
-WALK_A_BACK_COLORS = CHAR_COLORS
-WALK_B_BACK_COLORS = CHAR_COLORS
+CHAR_SPRITES_RIFAT = {
+    "STAND": SANJI_STAND,
+    "STAND_BACK": SANJI_STAND_BACK,
+    "WALK_A": SANJI_WALK_A,
+    "WALK_B": SANJI_WALK_B,
+    "WALK_A_BACK": SANJI_WALK_A_BACK,
+    "WALK_B_BACK": SANJI_WALK_B_BACK,
+    "HEAD_SLEEP": SANJI_HEAD_SLEEP,
+    "HEAD_BACK": SANJI_HEAD_BACK,
+    "BODY_BACK": SANJI_BODY_BACK,
+}
 
 # PLANT (9×6) — গাছের পাতা; 'G' = PLANT, 'g' = PLANT_D
 PLANT = [
